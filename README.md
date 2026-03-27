@@ -19,3 +19,8 @@ skills/        Skill drafts before deploying to ~/.claude/skills/
 
 - [Claude Code Internals — Cheat Sheet](internals/claude-code-internals-cheatsheet.md)
 - [Claude Code Internals — Presentation](internals/claude-code-internals-presentation.html) (Reveal.js, open in browser)
+- [Memory & Context Management](internals/memory-context-management.md) — how memory impacts token usage, two-tier loading, scaling guidelines
+
+### Skills (drafts)
+
+- [`/memory-audit`](skills/memory-audit/SKILL.md) — periodic review and pruning of memory files across all projects
