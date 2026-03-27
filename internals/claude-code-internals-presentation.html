@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Code Internals</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/black.css">
+<style>
+  :root {
+    --r-background-color: #1a1a2e;
+    --r-main-color: #e0e0e0;
+    --r-heading-color: #c9a0dc;
+    --r-link-color: #7eb8da;
+  }
+  .reveal { font-size: 28px; }
+  .reveal h1 { font-size: 1.8em; }
+  .reveal h2 { font-size: 1.4em; color: var(--r-heading-color); }
+  .reveal h3 { font-size: 1.1em; color: #7eb8da; }
+  .reveal table { font-size: 0.7em; margin: 0.5em auto; }
+  .reveal table th { background: #2a2a4a; color: #c9a0dc; }
+  .reveal table td { background: #1e1e3a; }
+  .reveal table th, .reveal table td { padding: 0.4em 0.8em; border: 1px solid #3a3a5a; }
+  .reveal ul, .reveal ol { font-size: 0.85em; }
+  .reveal li { margin-bottom: 0.4em; }
+  .reveal code { color: #7eb8da; background: #2a2a4a; padding: 0.1em 0.3em; border-radius: 3px; font-size: 0.9em; }
+  .reveal .subtitle { color: #999; font-size: 0.6em; margin-top: 0.5em; }
+  .reveal .highlight { color: #c9a0dc; font-weight: bold; }
+  .reveal .dim { color: #888; font-size: 0.8em; }
+  .reveal .two-col { display: flex; gap: 2em; text-align: left; }
+  .reveal .two-col > div { flex: 1; }
+  .reveal .takeaway { background: #2a2a4a; border-left: 4px solid #c9a0dc; padding: 0.6em 1em; margin: 0.5em 0; text-align: left; font-size: 0.8em; border-radius: 0 6px 6px 0; }
+  .reveal .badge { display: inline-block; padding: 0.15em 0.5em; border-radius: 4px; font-size: 0.7em; font-weight: bold; margin-right: 0.3em; }
+  .reveal .badge-green { background: #1a3a2a; color: #6ecf8e; border: 1px solid #2a5a3a; }
+  .reveal .badge-yellow { background: #3a3a1a; color: #cfcf6e; border: 1px solid #5a5a2a; }
+  .reveal .badge-red { background: #3a1a1a; color: #cf6e6e; border: 1px solid #5a2a2a; }
+  .reveal .badge-blue { background: #1a2a3a; color: #6e9fcf; border: 1px solid #2a4a5a; }
+</style>
+</head>
+<body>
+<div class="reveal">
+<div class="slides">
+
+<!-- Title -->
+<section>
+  <h1>Claude Code Internals</h1>
+  <p class="subtitle">How Claude Code manages state, memory, and context across sessions</p>
+</section>
+
+<!-- Overview -->
+<section>
+  <h2>What lives in <code>~/.claude/</code>?</h2>
+  <p>~15 directories, but only two categories matter:</p>
+  <div class="two-col">
+    <div>
+      <h3>You interact with</h3>
+      <ul>
+        <li><code>CLAUDE.md</code></li>
+        <li><code>settings.json</code></li>
+        <li><code>projects/*/memory/</code></li>
+        <li><code>plans/</code></li>
+        <li><code>skills/</code></li>
+        <li><code>plugins/</code></li>
+        <li><code>backups/</code></li>
+      </ul>
+    </div>
+    <div>
+      <h3>Internal plumbing</h3>
+      <ul>
+        <li><code>todos/</code></li>
+        <li><code>session-env/</code></li>
+        <li><code>sessions/</code></li>
+        <li><code>shell-snapshots/</code></li>
+        <li><code>file-history/</code></li>
+        <li><code>cache/</code>, <code>ide/</code>, <code>debug/</code></li>
+        <li><code>telemetry/</code>, <code>paste-cache/</code></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- User-facing files detail -->
+<section>
+  <h2>User-Facing Files</h2>
+  <table>
+    <tr><th>Path</th><th>What</th><th>When to touch</th></tr>
+    <tr><td><code>CLAUDE.md</code></td><td>Global behavioral rules</td><td>Add/edit rules, preferences, corrections</td></tr>
+    <tr><td><code>settings.json</code></td><td>Permissions, hooks, env vars</td><td>Configure via <code>/update-config</code> or edit directly</td></tr>
+    <tr><td><code>projects/*/memory/</code></td><td>Per-project memories</td><td>Curate, prune, seed, promote to CLAUDE.md</td></tr>
+    <tr><td><code>plans/</code></td><td>Session plans</td><td>Resume work, review decisions, clean up</td></tr>
+    <tr><td><code>skills/</code></td><td>Custom skill definitions</td><td>Create new skills (e.g., <code>/correct</code>)</td></tr>
+    <tr><td><code>backups/</code></td><td>Timestamped config backups</td><td>Restore broken configs</td></tr>
+  </table>
+</section>
+
+<!-- Memory: How it works -->
+<section>
+  <section>
+    <h2>Memory System</h2>
+    <p class="subtitle">How Claude carries context between sessions</p>
+  </section>
+
+  <section>
+    <h2>How Memory Works</h2>
+    <ul>
+      <li>Markdown files with frontmatter in <code>projects/&lt;path&gt;/memory/</code></li>
+      <li><code>MEMORY.md</code> is the index &mdash; one-line summaries loaded every session</li>
+      <li>Individual files read only when they seem relevant</li>
+      <li><strong>Scoped per project directory</strong> &mdash; invisible across projects</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Memory Types</h2>
+    <table>
+      <tr><th>Type</th><th>Purpose</th><th>Example</th></tr>
+      <tr>
+        <td><span class="badge badge-blue">feedback</span></td>
+        <td>Behavioral corrections</td>
+        <td>"No Co-Authored-By unless fully agentic"</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-green">project</span></td>
+        <td>Context not in the code</td>
+        <td>"React 19 upgrade follows sibling plugin pattern"</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-yellow">user</span></td>
+        <td>Who you are, what you know</td>
+        <td>"Deep Go expertise, new to React"</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-red">reference</span></td>
+        <td>Pointers to external systems</td>
+        <td>"Bugs tracked in Linear project INGEST"</td>
+      </tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>Memory Limitations</h2>
+    <table>
+      <tr><th>Concern</th><th>Detail</th></tr>
+      <tr><td>Scoping</td><td>Project-directory-scoped. Global lessons need <code>CLAUDE.md</code></td></tr>
+      <tr><td>Staleness</td><td>No expiry or auto-cleanup</td></tr>
+      <tr><td>Conflicts</td><td>Can contradict CLAUDE.md or other memories</td></tr>
+      <tr><td>Truncation</td><td>Index truncates past 200 lines</td></tr>
+      <tr><td>Best-effort</td><td>No guarantee Claude reads or writes them</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>Memory Maintenance</h2>
+    <ul>
+      <li><strong>Prune</strong> &mdash; delete memories for shipped features and resolved bugs</li>
+      <li><strong>Promote</strong> &mdash; move recurring feedback to <code>CLAUDE.md</code> rules</li>
+      <li><strong>Seed</strong> &mdash; write memories manually when Claude keeps rediscovering things</li>
+      <li><strong>Correct</strong> &mdash; fix bad memories directly, faster than hoping Claude self-corrects</li>
+    </ul>
+  </section>
+</section>
+
+<!-- Plans -->
+<section>
+  <section>
+    <h2>Plans</h2>
+    <p class="subtitle">Working documents for complex tasks</p>
+  </section>
+
+  <section>
+    <h2>How Plans Work</h2>
+    <ul>
+      <li>Markdown files in <code>plans/</code> with generated names<br><span class="dim">e.g., <code>clever-prancing-goblet.md</code></span></li>
+      <li>Created when Claude enters plan mode during a session</li>
+      <li>Claude writes the plan, you approve, Claude executes</li>
+      <li><strong>Not auto-reloaded</strong> across sessions &mdash; persist on disk but must be explicitly referenced</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>What Plans Capture</h2>
+    <ul>
+      <li><strong>Implementation blueprints</strong> &mdash; step-by-step, file-level changes</li>
+      <li><strong>Situational snapshots</strong> &mdash; current state when things go sideways</li>
+      <li><strong>Decision rationale</strong> &mdash; <em>why</em> an approach was chosen<br><span class="dim">Often not in code or commits &mdash; only lives in the plan</span></li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Practical Use of Plans</h2>
+    <ul>
+      <li><strong>Resume</strong> &mdash; "Read <code>plans/toasty-gathering-elephant.md</code> and pick up where we left off"</li>
+      <li><strong>Review</strong> &mdash; revisit decision rationale after the fact</li>
+      <li><strong>Pre-write</strong> &mdash; author a plan yourself and tell Claude to execute it</li>
+      <li><strong>Clean up</strong> &mdash; delete completed plans; promote durable rationale to memories</li>
+    </ul>
+  </section>
+</section>
+
+<!-- Self-Correction Loop -->
+<section>
+  <section>
+    <h2>Self-Correction Loop</h2>
+    <p class="subtitle">Learning from mistakes across sessions</p>
+  </section>
+
+  <section>
+    <h2>The Problem</h2>
+    <ul>
+      <li>Each session starts <strong>completely fresh</strong></li>
+      <li>No recollection of past corrections unless written to disk</li>
+      <li>In practice, corrections get lost:
+        <ul>
+          <li>Claude prioritizes continuing the task</li>
+          <li>Treats correction as session-local, not generalizable</li>
+          <li>Session ends before circling back</li>
+        </ul>
+      </li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Two Persistence Layers</h2>
+    <table>
+      <tr><th>Layer</th><th>Scope</th><th>Durability</th><th>Reliability</th></tr>
+      <tr>
+        <td><code>CLAUDE.md</code> rules</td>
+        <td>Global or per-project</td>
+        <td>Permanent</td>
+        <td><span class="badge badge-green">High</span></td>
+      </tr>
+      <tr>
+        <td>Feedback memories</td>
+        <td>Per project directory</td>
+        <td>Until pruned</td>
+        <td><span class="badge badge-yellow">Medium</span></td>
+      </tr>
+    </table>
+    <br>
+    <p class="dim">Rule of thumb: if it matters everywhere, it goes in CLAUDE.md.<br>If it's project-specific context, it's a memory.</p>
+  </section>
+
+  <section>
+    <h2>Making It Reliable</h2>
+    <ol>
+      <li><strong>Mandatory, immediate edits</strong> &mdash; CLAUDE.md instruction requires stopping the task to propose a rule edit when corrected</li>
+      <li><strong>Explicit prompting</strong> &mdash; say "add this to CLAUDE.md" to force the edit</li>
+      <li><strong>Periodic review</strong> &mdash; run sessions to promote feedback memories to rules</li>
+    </ol>
+    <h3>Further improvements</h3>
+    <ul>
+      <li>Custom <code>/correct</code> skill</li>
+      <li>Session-end hook for correction review</li>
+      <li>Systematic memory-to-CLAUDE.md promotion</li>
+    </ul>
+  </section>
+</section>
+
+<!-- Key Takeaways -->
+<section>
+  <h2>Key Takeaways</h2>
+  <div class="takeaway">
+    <strong>1.</strong> <code>CLAUDE.md</code> is the only reliable persistence. Always loaded, globally scoped, human-editable.
+  </div>
+  <div class="takeaway">
+    <strong>2.</strong> Memories are useful but fragile. Treat them as a staging area, not a permanent store.
+  </div>
+  <div class="takeaway">
+    <strong>3.</strong> Plans are underused across sessions. Best record of <em>why</em> decisions were made, but don't resurface automatically.
+  </div>
+  <div class="takeaway">
+    <strong>4.</strong> Self-correction requires forcing functions. Instructions alone aren't enough.
+  </div>
+  <div class="takeaway">
+    <strong>5.</strong> Most of <code>~/.claude/</code> is plumbing. Only 6&ndash;8 of ~15 directories are worth touching.
+  </div>
+</section>
+
+</div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+<script>
+Reveal.initialize({
+  hash: true,
+  slideNumber: true,
+  transition: 'slide',
+  width: 1200,
+  height: 700,
+  margin: 0.08,
+});
+</script>
+</body>
+</html>
