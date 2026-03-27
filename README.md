@@ -1,6 +1,8 @@
 # claude-workflows
 
-Practical reference material, learnings, and tools for working with Claude Code.
+A personal knowledge base for how I work with Claude Code — the learnings, patterns, and tools that accumulate through daily use but have no natural home.
+
+Claude Code's built-in persistence (memory, plans) is useful but fragile: memories are project-scoped and best-effort, plans don't resurface automatically, and corrections made in one session often don't survive to the next. This repo is the durable layer on top — a place to capture what I've learned, share it with peers, and build on it over time.
 
 ## Structure
 
