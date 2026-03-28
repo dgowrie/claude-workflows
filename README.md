@@ -21,6 +21,11 @@ skills/        Skill drafts before deploying to ~/.claude/skills/
 - [Claude Code Internals — Presentation](internals/claude-code-internals-presentation.html) (Reveal.js, open in browser)
 - [Memory & Context Management](internals/memory-context-management.md) — how memory impacts token usage, two-tier loading, scaling guidelines
 
-### Skills (drafts)
+### Workflows
 
+- [Skill Management](workflows/skill-management.md) — three-tier sync architecture, creation flows, launchd watcher
+
+### Skills
+
+- [`/pr-review`](skills/pr-review/SKILL.md) — AI-assisted GitHub PR review with line-level draft comments
 - [`/memory-audit`](skills/memory-audit/SKILL.md) — periodic review and pruning of memory files across all projects
