@@ -63,9 +63,27 @@ All surfaces resolve to the same physical files in the repo through the symlink 
 
 ---
 
+## Sync Infrastructure
+
+Both the sync script and launchd plist are version-controlled in this repo under `workflows/sync/`. The deployed locations are symlinks:
+
+```
+workflows/sync/sync-skills.sh           -> ~/.claude/sync-skills.sh
+workflows/sync/com.claude.sync-skills.plist -> ~/Library/LaunchAgents/com.claude.sync-skills.plist
+```
+
+To set up on a fresh machine, create the symlinks and load the watcher:
+
+```bash
+ln -s ~/dev/claude-workflows/workflows/sync/sync-skills.sh ~/.claude/sync-skills.sh
+ln -s ~/dev/claude-workflows/workflows/sync/com.claude.sync-skills.plist ~/Library/LaunchAgents/com.claude.sync-skills.plist
+launchctl load ~/Library/LaunchAgents/com.claude.sync-skills.plist
+```
+
 ## Sync Script
 
-**Location:** `~/.claude/sync-skills.sh`
+**Source:** `workflows/sync/sync-skills.sh`
+**Deployed at:** `~/.claude/sync-skills.sh` (symlink)
 
 **What it does on each run:**
 1. Migrates real dirs from Cowork to repo (skipping built-ins: docx, pdf, pptx, schedule, skill-creator, xlsx)
@@ -86,24 +104,42 @@ All surfaces resolve to the same physical files in the repo through the symlink 
 
 ## launchd Watcher
 
-**Location:** `~/Library/LaunchAgents/com.claude.sync-skills.plist`
+**Source:** `workflows/sync/com.claude.sync-skills.plist`
+**Deployed at:** `~/Library/LaunchAgents/com.claude.sync-skills.plist` (symlink)
+
+**How it works:** This is NOT a persistent daemon. launchd is a macOS system service that registers the plist and uses kernel-level filesystem monitoring (kqueue/FSEvents) to watch the three skill directories. Between triggers, nothing is running - zero CPU, zero memory. When a directory entry changes, macOS spawns the script, it runs for ~100ms, then exits.
 
 **Triggers:**
-- On login (RunAtLoad)
-- When any of the three skill directories change (WatchPaths)
+- On login (RunAtLoad) - catches changes made while the machine was off
+- On directory change (WatchPaths) - fires when entries are added/removed in any of the three skill directories
 
 **Management:**
 ```bash
-# Check if running
+# Check if registered (does not mean actively running)
 launchctl list | grep claude
 
 # Reload after plist changes
 launchctl unload ~/Library/LaunchAgents/com.claude.sync-skills.plist
 launchctl load ~/Library/LaunchAgents/com.claude.sync-skills.plist
 
+# Stop watching entirely
+launchctl unload ~/Library/LaunchAgents/com.claude.sync-skills.plist
+
 # Monitor
 tail -f ~/.claude/sync-skills.log
 ```
+
+---
+
+## Hardcoded Paths and Portability
+
+The sync script and plist contain absolute paths with the username (e.g., `/Users/dggraf/`). This is a portability concern, not a security concern:
+
+- **Not sensitive** - the username is visible to any process on the machine; launchd agents in `~/Library/LaunchAgents/` are user-scoped by definition (only your user can load or see them)
+- **Not shared** - the paths point to your own config directories, running under your own account
+- **Portability** - if this repo is shared or used on another machine, the paths need updating. If that becomes needed, the script and plist could be templated (replace `/Users/dggraf` with a placeholder, generate the real files during setup)
+
+For now, hardcoded paths are the simplest correct approach for a single-machine setup.
 
 ---
 

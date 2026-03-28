@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.claude.sync-skills</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/Users/dggraf/.claude/sync-skills.sh</string>
+  </array>
+
+  <key>WatchPaths</key>
+  <array>
+    <string>/Users/dggraf/dev/claude-workflows/skills</string>
+    <string>/Users/dggraf/.claude/skills</string>
+    <string>/Users/dggraf/Library/Application Support/Claude/local-agent-mode-sessions/skills-plugin/827f9b90-1736-4f25-b0d0-9f7f9006212c/0f5b018c-ecbb-4c63-add7-ae92ef923db7/skills</string>
+  </array>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>StandardOutPath</key>
+  <string>/Users/dggraf/.claude/sync-skills.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/dggraf/.claude/sync-skills.log</string>
+</dict>
+</plist>
