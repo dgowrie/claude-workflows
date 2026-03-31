@@ -27,8 +27,17 @@ skills/        Skill drafts before deploying to ~/.claude/skills/
 
 ### Skills
 
+Skills in this repo are symlinked into `~/.claude/skills/`, making them globally available across all projects. Claude Code only loads skills from `~/.claude/skills/`, so without the symlink a skill defined here would only be accessible when working in this repo. The symlink bridges the two: edit and commit in the repo, use from anywhere.
+
+```
+~/.claude/skills/branch-cleanup -> ~/dev/claude-workflows/skills/branch-cleanup/
+```
+
+Changes to a skill file in the repo are immediately live — no copy or sync step. For the full three-tier sync architecture (repo, global, Cowork), see [Skill Management](workflows/skill-management.md).
+
 - [`/pr-review`](skills/pr-review/SKILL.md) — AI-assisted GitHub PR review with line-level draft comments
 - [`/memory-audit`](skills/memory-audit/SKILL.md) — periodic review and pruning of memory files across all projects
+- [`/branch-cleanup`](skills/branch-cleanup/SKILL.md) — interactive local branch cleanup with PR cross-referencing
 
 ## Improvements to consider
 
@@ -38,6 +47,7 @@ skills/        Skill drafts before deploying to ~/.claude/skills/
 - **Invert the Cowork built-ins skip list** — currently a hardcoded list of names; breaks silently if Cowork adds new built-ins. Alternative: only migrate skills with a known marker (e.g., frontmatter field or naming convention) instead of skipping known built-ins.
 - **Symlink chain validation** — add an end-to-end check at the end of the sync script: for each repo skill, verify the chain resolves through all three tiers. Log warnings for broken links.
 - **Log rotation** — `sync-skills.log` grows forever. Add a size/line check to the script (truncate when over threshold) or configure `newsyslog`.
+- **Auto-symlink for new skills** — adding a skill to the repo requires a manual `ln -s` into `~/.claude/skills/`. Add a step to the sync script (or a standalone helper) that scans `skills/*/SKILL.md` and ensures a corresponding symlink exists.
 
 ### CLAUDE.md hygiene
 
