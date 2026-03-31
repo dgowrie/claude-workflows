@@ -16,3 +16,11 @@ This repo contains reference material, learnings, and tools for working with Cla
 - `workflows/` — patterns and practices for working effectively with Claude Code
 - `explorations/` — session notes and findings from investigating Claude Code behavior
 - `skills/` — skill drafts and development (before deploying to `~/.claude/skills/`)
+
+## Adding a new skill
+
+When adding a skill to `skills/`:
+
+1. Create `skills/<name>/SKILL.md` with `user-invocable: true` in frontmatter
+2. Symlink into `~/.claude/skills/`: `ln -s ~/dev/claude-workflows/skills/<name> ~/.claude/skills/<name>`
+3. Add an entry to the Skills section in `README.md`
