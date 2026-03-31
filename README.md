@@ -38,6 +38,7 @@ Changes to a skill file in the repo are immediately live — no copy or sync ste
 - [`/pr-review`](skills/pr-review/SKILL.md) — AI-assisted GitHub PR review with line-level draft comments
 - [`/memory-audit`](skills/memory-audit/SKILL.md) — periodic review and pruning of memory files across all projects
 - [`/branch-cleanup`](skills/branch-cleanup/SKILL.md) — interactive local branch cleanup with PR cross-referencing
+- [`/grill-me`](skills/grill-me/SKILL.md) — stress-test a plan or design through relentless interrogation
 
 ## Improvements to consider
 
