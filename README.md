@@ -39,6 +39,9 @@ Changes to a skill file in the repo are immediately live — no copy or sync ste
 - [`/memory-audit`](skills/memory-audit/SKILL.md) — periodic review and pruning of memory files across all projects
 - [`/branch-cleanup`](skills/branch-cleanup/SKILL.md) — interactive local branch cleanup with PR cross-referencing
 - [`/grill-me`](skills/grill-me/SKILL.md) — stress-test a plan or design through relentless interrogation
+- [`/write-a-prd`](skills/write-a-prd/SKILL.md) — interactive PRD creation through interview, codebase exploration, and module design
+- [`/prd-to-issues`](skills/prd-to-issues/SKILL.md) — break a PRD into GitHub issues using tracer-bullet vertical slices
+- [`/tdd`](skills/tdd/SKILL.md) — test-driven development with red-green-refactor loop and reference guides
 
 ## Improvements to consider
 
