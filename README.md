@@ -56,3 +56,8 @@ Changes to a skill file in the repo are immediately live — no copy or sync ste
 ### CLAUDE.md hygiene
 
 - **Triage the follow-ups list** — the Self-Correction Loop section in `~/.claude/CLAUDE.md` has 6 open follow-ups. Some are actionable now (memory-audit deployment, session-start memory report), others are speculative. Prioritize or prune before the list becomes a stale backlog.
+- **Version-control global CLAUDE.md** — `~/.claude/CLAUDE.md` is not tracked anywhere. Add it to this repo and symlink it in, same pattern as skills. Priority: high - it's actively evolving with no history or backup.
+
+### Skills
+
+- **Evaluate replacing `/pr-review` with Cowork's `/review`** — our custom skill had a repo-resolution bug (given a grafana-adaptivelogs-app PR, it cloned and worked in adaptivetraces-app, took many turns to self-correct). Cowork's built-in `/review` may handle repo context better. However, the two skills surfaced different feedback, so the right move is likely to consolidate the best of both rather than a straight swap.
