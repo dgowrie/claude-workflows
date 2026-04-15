@@ -56,7 +56,7 @@ Changes to a skill file in the repo are immediately live — no copy or sync ste
 ### CLAUDE.md hygiene
 
 - **Triage the follow-ups list** — the Self-Correction Loop section in `~/.claude/CLAUDE.md` has 6 open follow-ups. Some are actionable now (memory-audit deployment, session-start memory report), others are speculative. Prioritize or prune before the list becomes a stale backlog.
-- **Version-control global CLAUDE.md** — `~/.claude/CLAUDE.md` is not tracked anywhere. Add it to this repo and symlink it in, same pattern as skills. Priority: high - it's actively evolving with no history or backup.
+- ~~**Version-control global CLAUDE.md**~~ — Done. Tracked at `config/CLAUDE.md`, symlinked to `~/.claude/CLAUDE.md`.
 
 ### Skills
 
