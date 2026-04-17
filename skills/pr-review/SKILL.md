@@ -3,11 +3,14 @@ name: pr-review
 user-invocable: true
 description: >
   AI-assisted GitHub PR review that produces concise, copy-paste-ready draft comments with line
-  references and code suggestions. Use this skill whenever the user shares a GitHub PR URL and wants
-  a code review, second-set-of-eyes analysis, or help understanding a PR before approving. Trigger
-  phrases include: "review this PR", "look at this PR", "give me feedback on this PR", "help me
-  review", "PR review", "check this pull request", "I want to approve but need to understand",
-  "draft review comments", or any message containing a github.com/*/pull/* URL.
+  references and code suggestions. Cross-checks prior bot-generated reviews (Copilot, CodeRabbit,
+  Codex, Sourcery, Gemini Code Assist, etc.) including resolved threads, and surfaces silent
+  dismissals where bot-flagged code was resolved without change. Use this skill whenever the user
+  shares a GitHub PR URL and wants a code review, second-set-of-eyes analysis, or help
+  understanding a PR before approving. Trigger phrases include: "review this PR", "look at this
+  PR", "give me feedback on this PR", "help me review", "PR review", "check this pull request",
+  "review with bots", "check bot feedback", "I want to approve but need to understand", "draft
+  review comments", or any message containing a github.com/*/pull/* URL.
 ---
 
 # PR Review
@@ -155,7 +158,62 @@ State the detected type at the top of your output.
 
 ---
 
-## Step 6: Before you write a comment, verify it
+## Step 6: Cross-check prior bot reviews
+
+Bots frequently leave review comments that get marked resolved without a corresponding code change. "Resolved" on GitHub requires no code change — anyone with write access can click it — so resolution is not evidence a concern was addressed.
+
+Account for: Copilot, Codex, CodeRabbit, Sourcery, Gemini Code Assist, and anything else authored by a GitHub App. Fetch every thread regardless of resolution state:
+
+```bash
+gh api graphql -f query='
+  query($owner:String!, $repo:String!, $number:Int!) {
+    repository(owner:$owner, name:$repo) {
+      pullRequest(number:$number) {
+        reviewThreads(first:100) {
+          nodes {
+            id
+            isResolved
+            isOutdated
+            path
+            line
+            originalLine
+            comments(first:20) {
+              nodes {
+                id
+                url
+                author { login __typename }
+                body
+                createdAt
+                line
+                originalLine
+              }
+            }
+          }
+        }
+      }
+    }
+  }' -f owner=<owner> -f repo=<repo> -F number=<num>
+```
+
+Treat a comment as bot-authored if `author.__typename == "Bot"` or the login matches a known bot (e.g. `copilot-pull-request-reviewer[bot]`, `coderabbitai[bot]`).
+
+For each bot comment (resolved or not):
+
+- Restate the claim in one sentence
+- Verify against the current diff — is the flagged code still present, unchanged?
+- Note `isOutdated`: `true` means GitHub detected the referenced lines changed (suggestive of addressed); `false` + `isResolved=true` + code unchanged is the canonical silent-dismissal signature
+- Categorize: **still valid**, **addressed by later commit**, **false positive**, **style-only (linter-configured → ignore)**
+- Any *still-valid* concern that was resolved without a corresponding code change is a **silent dismissal** — promote it into your own 🔴 Bugs or 🟡 Warnings output with the thread URL as traceability
+
+Preserve thread `id`, comment `id`, and comment `url` for linking findings back to GitHub and for any follow-up mutations (e.g. `resolveReviewThread`).
+
+**Pagination caveat:** the query caps at 100 threads × 20 comments each. On very noisy PRs, paginate via `pageInfo { hasNextPage endCursor }` with `after:` cursors before trusting the coverage is complete.
+
+If no bots have commented on the PR, note `No bot reviews present.` and move on — don't fabricate coverage.
+
+---
+
+## Step 7: Before you write a comment, verify it
 
 This is the most important discipline in the skill. Before flagging a concern:
 
@@ -171,7 +229,7 @@ useful.
 
 ---
 
-## Step 7: Output format
+## Step 8: Output format
 
 ### Review mode (default)
 
@@ -192,6 +250,16 @@ classification issues, rollout edge cases. If none, write "None identified.">
 
 ### 💡 Suggestions
 <Optional improvements. Omit this section entirely if nothing genuine to say.>
+
+### 🤖 Bot review coverage
+
+| Bot | File · Line | Status | Assessment |
+|-----|-------------|--------|-----------|
+| Copilot | [src/foo.ts:42](https://github.com/owner/repo/pull/123#discussion_r111) | Resolved, not outdated | Still valid — code unchanged. **Silent dismissal** — promoted into 🔴 Bugs above. |
+| CodeRabbit | [src/bar.ts:10](https://github.com/owner/repo/pull/123#discussion_r222) | Open | Valid, matches current diff. Rolled into 🟡 Warnings above. |
+| Codex | [src/baz.ts:88](https://github.com/owner/repo/pull/123#discussion_r333) | Resolved, outdated | Addressed by commit abc1234. No action. |
+
+<If no bots have commented: write "No bot reviews present." and omit the table.>
 ```
 
 Each comment inside a section uses this format:
@@ -231,7 +299,7 @@ One or two sentences stating the concern and why it matters.
 
 ---
 
-## Step 8: Offer to post to GitHub
+## Step 9: Offer to post to GitHub
 
 After presenting the review, ask:
 

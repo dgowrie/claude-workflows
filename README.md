@@ -42,6 +42,7 @@ Changes to a skill file in the repo are immediately live — no copy or sync ste
 - [`/write-a-prd`](skills/write-a-prd/SKILL.md) — interactive PRD creation through interview, codebase exploration, and module design
 - [`/prd-to-issues`](skills/prd-to-issues/SKILL.md) — break a PRD into GitHub issues using tracer-bullet vertical slices
 - [`/tdd`](skills/tdd/SKILL.md) — test-driven development with red-green-refactor loop and reference guides
+- [`/review-thorough`](skills/review-thorough/SKILL.md) — wraps built-in `/review` and additionally evaluates bot reviews including resolved threads
 
 ## Improvements to consider
 
