@@ -25,6 +25,10 @@ skills/        Skill drafts before deploying to ~/.claude/skills/
 
 - [Skill Management](workflows/skill-management.md) — three-tier sync architecture, creation flows, launchd watcher
 
+### Explorations
+
+- [Milestone Ralph vs AIHero Ralph](explorations/milestone-ralph-vs-aihero.md) — capability comparison and roadmap implications for the milestone-driven Ralph skills
+
 ### Skills
 
 Skills in this repo are symlinked into `~/.claude/skills/`, making them globally available across all projects. Claude Code only loads skills from `~/.claude/skills/`, so without the symlink a skill defined here would only be accessible when working in this repo. The symlink bridges the two: edit and commit in the repo, use from anywhere.
@@ -41,6 +45,8 @@ Changes to a skill file in the repo are immediately live — no copy or sync ste
 - [`/grill-me`](skills/grill-me/SKILL.md) — stress-test a plan or design through relentless interrogation
 - [`/write-a-prd`](skills/write-a-prd/SKILL.md) — interactive PRD creation through interview, codebase exploration, and module design
 - [`/prd-to-issues`](skills/prd-to-issues/SKILL.md) — break a PRD into GitHub issues using tracer-bullet vertical slices
+- [`/milestone-to-tasks`](skills/milestone-to-tasks/SKILL.md) — generate a structured `tasks.json` + `progress.md` from a GitHub milestone, ready for a Ralph-style loop
+- [`/work-next-task`](skills/work-next-task/SKILL.md) — one iteration of a Ralph loop over `tasks.json`: pick, work, verify, commit. Ships with `scripts/ralph.sh` reference harness
 - [`/tdd`](skills/tdd/SKILL.md) — test-driven development with red-green-refactor loop and reference guides
 
 ## Improvements to consider
