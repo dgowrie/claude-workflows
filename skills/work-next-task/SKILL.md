@@ -24,7 +24,7 @@ Composes with:
 
 **Mutation surface in `tasks.json`:** only `status` on a single task per iteration. Nothing else is touched. The user owns `priority`, `blocked_by`, `steps`, `description` — these are the living spec.
 
-**progress.md discipline:** append new entries at the **top** (reverse-chronological). **Never edit or delete existing entries.** The two-commit discipline and `git diff` review catch violations.
+**progress.md discipline:** prepend new entries at the **top** (reverse-chronological). **Never edit or delete existing entries.** The two-commit discipline and `git diff` review catch violations.
 
 ## Iteration
 
@@ -65,10 +65,10 @@ Among candidates, pick highest `priority` (P0 > P1 > P2). Tiebreak: lowest `id`.
 ### 4. Drift check
 
 ```bash
-gh issue view <github_issue> --json title,state,labels
+gh issue view <github_issue> --json title,state
 ```
 
-Compare upstream `title`, `state`, `labels` to the tasks.json entry. If `state: closed` upstream or labels have changed materially, halt:
+Compare upstream `title` and `state` to the tasks.json entry. If `state: closed` upstream, halt:
 
 - Append drift entry to progress.md
 - Emit `<promise>HALT</promise>` with reason "drift detected on T<id>"

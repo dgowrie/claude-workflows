@@ -171,7 +171,7 @@ Next:
 
 - Pull upstream milestone state.
 - **Add** new issues as new tasks (new `T<n>` ids, fresh `status: open`, deps re-inferred and re-confirmed).
-- **Update** `title`, `description`, `labels` on existing tasks.
+- **Update** `title`, `description` on existing tasks.
 - **Never touch** `status`, `blocked_by`, `priority`, `steps` on existing tasks — these are user-owned mid-flight.
 - **Upstream closed → local `done`:** one-directional sync for issue closure.
 - Append a refresh entry to `progress.md`.

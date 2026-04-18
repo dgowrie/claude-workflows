@@ -5,10 +5,10 @@
 # state is carried across — all state lives in tasks.json + progress.md. Exits on
 # completion token, halt token, or iteration cap.
 #
-# Usage:
-#   ./scripts/ralph.sh                    # 50 iterations, standard mode (single-worker)
-#   ./scripts/ralph.sh 100                # 100 iterations, standard mode
-#   ./scripts/ralph.sh 100 --autonomous   # autonomous mode (push + draft PRs, multi-worker-safe)
+# Usage (run from repo root):
+#   ./skills/work-next-task/scripts/ralph.sh                    # 50 iterations, standard mode (single-worker)
+#   ./skills/work-next-task/scripts/ralph.sh 100                # 100 iterations, standard mode
+#   ./skills/work-next-task/scripts/ralph.sh 100 --autonomous   # autonomous mode (push + draft PRs, multi-worker-safe)
 #
 # Exit codes:
 #   0  MILESTONE_COMPLETE
