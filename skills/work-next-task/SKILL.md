@@ -20,7 +20,7 @@ Composes with:
 
 **Inputs:** `.claude/milestones/<slug>/tasks.json` + `.claude/milestones/<slug>/progress.md`. Must already exist — run `/milestone-to-tasks` first.
 
-**Default mode:** standard (single-worker, local-only). `--autonomous` enables push + draft PR + multi-worker discipline.
+**Default mode:** standard (single-worker, local-only). `--autonomous` enables push + draft PR + multi-worker discipline, and suppresses interactive prompts (taking a documented safe default at each prompt site; see steps 1 and 9).
 
 **Mutation surface in `tasks.json`:** only `status` on a single task per iteration. Nothing else is touched. The user owns `priority`, `blocked_by`, `steps`, `description` — these are the living spec.
 
@@ -30,7 +30,13 @@ Composes with:
 
 ### 1. Find and load context
 
-Locate `.claude/milestones/<slug>/tasks.json`. If multiple `<slug>` directories exist, ask the user (or accept `--slug`).
+Locate `.claude/milestones/<slug>/tasks.json`. Resolution order:
+
+1. `--slug <name>` arg if provided.
+2. The sole `<slug>` directory if exactly one exists.
+3. If multiple exist and no `--slug` given:
+   - **Standard mode:** prompt the user to pick.
+   - **Autonomous mode:** halt (emit `<promise>HALT</promise>` with reason "ambiguous slug; pass `--slug <name>`"). Prompts are suppressed under `--autonomous`.
 
 Read `tasks.json` and the top ~20 entries from `progress.md`.
 
@@ -125,12 +131,14 @@ Include the PR number in the progress entry.
 
 ### 9. Check for completion
 
-If ALL tasks in `tasks.json` now have `status: done`, prompt:
+If ALL tasks in `tasks.json` now have `status: done`:
 
-> All tasks complete. Delete `.claude/milestones/<slug>/`? (y/N)
+**Standard mode:** prompt "All tasks complete. Delete `.claude/milestones/<slug>/`? (y/N)".
 
 - **On confirmation:** delete the directory, commit `chore(tasks): cleanup completed milestone <slug>`, emit `<promise>MILESTONE_COMPLETE</promise>`.
 - **On decline:** emit `<promise>MILESTONE_COMPLETE</promise>` anyway; artifacts remain for inspection.
+
+**Autonomous mode:** no prompt (safe default is to keep artifacts). Emit `<promise>MILESTONE_COMPLETE</promise>` immediately; artifacts remain for post-hoc inspection and manual cleanup.
 
 ### 10. Exit
 
