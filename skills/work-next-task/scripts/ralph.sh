@@ -49,7 +49,10 @@ CMD="/work-next-task"
 for ((i=1; i<=MAX; i++)); do
   echo "=== iteration $i/$MAX ==="
 
-  result=$(claude -p --permission-mode acceptEdits "$CMD")
+  if ! result=$(claude -p --permission-mode acceptEdits "$CMD"); then
+    echo "=== iteration $i: claude invocation failed, continuing ==="
+    continue
+  fi
   echo "$result"
 
   if [[ "$result" == *"<promise>MILESTONE_COMPLETE</promise>"* ]]; then
