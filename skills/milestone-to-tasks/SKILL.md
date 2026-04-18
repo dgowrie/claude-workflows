@@ -151,6 +151,8 @@ Ensure `.gitattributes` at repo root contains:
 
 Enables clean auto-merge of concurrent progress appends across worktrees. Add only if missing.
 
+> Note: `merge=union` preserves all entries across concurrent appends but does not guarantee strict line ordering after a merge — git applies the two sides in an unspecified order when both sides insert at the top. Use the ISO timestamp in each entry header as the authoritative sort key when a lookback is order-sensitive (e.g., the retry-cap scan in `/work-next-task`).
+
 ### 8. Report output
 
 ```
