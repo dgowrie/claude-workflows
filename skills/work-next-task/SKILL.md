@@ -58,7 +58,7 @@ Find tasks where:
 
 Among candidates, pick highest `priority` (P0 > P1 > P2). Tiebreak: lowest `id`.
 
-**Retry-cap check:** before committing to the task, count recent `reverted to open` entries for its id in `progress.md`. If count >= `config.max_retries_per_task`, skip the task and halt:
+**Retry-cap check:** before committing to the task, count `reverted to open` entries for its id across the *entire* `progress.md` (not the top-~20 window loaded in step 1). If count >= `config.max_retries_per_task`, skip the task and halt:
 
 - Append drift/halt entry to progress.md
 - Emit `<promise>HALT</promise>` with reason "T<id> exceeded retry cap, needs human review"
@@ -98,10 +98,10 @@ Read the canonical GH issue body via `gh issue view <github_issue>`. Implement t
 
 Walk every item in the task's `steps[]` as an acceptance gate. If any step fails:
 
-- Do **not** commit code changes.
+- Discard uncommitted code changes first: `git restore --staged . && git restore .` plus `git clean -fd` for new files. Prevents stale edits from contaminating the next iteration. Run this **before** the tasks.json / progress.md edits below; because the prior pickup commit (step 5) already persisted tasks.json and progress.md at the in_progress state, restoring the working tree resets everything to that clean baseline and the fresh edits below apply on top.
 - Revert `status: in_progress → open` in tasks.json.
 - Append failure entry to progress.md (template below).
-- Commit: `chore(tasks): T<id> reverted to open`.
+- Commit: `chore(tasks): T<id> reverted to open` (stage only `tasks.json` and `progress.md`).
 - **Autonomous only:** push the revert commit.
 - Exit silently (no completion token). Normal iteration — loop continues.
 
