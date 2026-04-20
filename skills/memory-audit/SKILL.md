@@ -64,7 +64,9 @@ Report the file size for each memory.
 
 ### Time references
 
-Flag memories containing relative date phrases ("next week", "this quarter", "by Friday") rather than absolute dates. Propose converting to absolute dates - relative phrasing becomes unreadable weeks after the memory was written.
+Flag memories containing relative date phrases ("next week", "this quarter", "by Friday") rather than absolute dates. Relative phrasing becomes unreadable weeks after the memory was written.
+
+When proposing a conversion, anchor from the memory's reference point, *not today's date*: use an explicit timestamp in the memory body if one exists, otherwise the file's last-modification time. If the intended date remains ambiguous (e.g., the memory has been edited multiple times and the relative phrase could belong to any edit), do not guess - flag it and ask the user to confirm before suggesting a replacement.
 
 ### Easy to re-find elsewhere
 
