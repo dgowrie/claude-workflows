@@ -14,7 +14,7 @@ One iteration of a ralph loop over `.claude/milestones/<slug>/tasks.json`. Pick,
 Composes with:
 
 - `/loop /work-next-task` — in-session convenience (carries session context, less Ralph-pure)
-- `scripts/ralph.sh` — headless shell harness for capital-R Ralph runs (fresh process per iteration, file-only state)
+- `./skills/work-next-task/scripts/ralph.sh` — headless shell harness for capital-R Ralph runs, run from repo root (fresh process per iteration, file-only state)
 
 ## Contract
 

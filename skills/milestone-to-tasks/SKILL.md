@@ -161,10 +161,10 @@ Wrote:
   .claude/milestones/<slug>/progress.md
   .gitattributes (updated)
 
-Next:
-  /work-next-task                    one iteration
-  scripts/ralph.sh                   full capital-R Ralph loop
-  /loop /work-next-task              in-session loop (less Ralph-pure)
+Next (run from repo root):
+  /work-next-task                              one iteration
+  ./skills/work-next-task/scripts/ralph.sh     full capital-R Ralph loop
+  /loop /work-next-task                        in-session loop (less Ralph-pure)
 ```
 
 ## Refresh mode
