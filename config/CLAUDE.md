@@ -122,7 +122,6 @@ On correction (user or self-caught): propose `CLAUDE.md` update **immediately, b
 ### Follow-ups (remove once resolved)
 
 - Custom `/correct` skill - one-command trigger for corrections
-- Periodic memory-to-CLAUDE.md promotion sessions
 - Session-end hook prompting correction review
 - Session-start memory report for relevance calibration
 
