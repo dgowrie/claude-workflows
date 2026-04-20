@@ -4,7 +4,8 @@ description: >
   Review, consolidate, and prune a project's memory files. Merges duplicates, sharpens durable entries,
   retires dated ones, fixes relative time references, flags oversized files, surfaces promotion
   candidates for global CLAUDE.md, and tidies the `MEMORY.md` index. Defaults to the current project;
-  offers a cross-project sweep after - duplicated memories across projects are strong promotion signals.
+  offers a cross-project sweep after the main report; duplicated memories across projects are strong
+  promotion signals.
   Trigger phrases: "audit memories", "consolidate memories", "tidy up memory", "clean up memories",
   "prune memories", "review memories", "merge memory files", "memory audit".
 ---
@@ -140,7 +141,7 @@ After presenting the report, ask which actions the user wants to take. Then exec
 - **Delete**: Remove the memory file and its `MEMORY.md` index entry
 - **Resize**: Propose a trimmed version of the file for user approval
 - **Fix time references**: Update the memory file to replace relative dates with absolute ones
-- **Drop (easy to re-find)**: Remove the memory file and its `MEMORY.md` index entry
+- **Drop (easy to re-find elsewhere)**: Remove the memory file and its `MEMORY.md` index entry
 - **Improve description**: Update the `MEMORY.md` index entry
 - **Merge**: Combine files, update index, delete the redundant file
 - **Promote**: Propose the CLAUDE.md addition, apply on confirmation, then delete the memory
