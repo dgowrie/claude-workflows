@@ -40,7 +40,7 @@ Skills in this repo are symlinked into `~/.claude/skills/`, making them globally
 Changes to a skill file in the repo are immediately live — no copy or sync step. For the full three-tier sync architecture (repo, global, Cowork), see [Skill Management](workflows/skill-management.md).
 
 - [`/pr-review`](skills/pr-review/SKILL.md) — AI-assisted GitHub PR review with line-level draft comments
-- [`/memory-audit`](skills/memory-audit/SKILL.md) — periodic review and pruning of memory files across all projects
+- [`/memory-audit`](skills/memory-audit/SKILL.md) — reflective review, consolidation, and pruning of memory files; defaults to current project, offers a cross-project sweep for promotion candidates
 - [`/branch-cleanup`](skills/branch-cleanup/SKILL.md) — interactive local branch cleanup with PR cross-referencing
 - [`/grill-me`](skills/grill-me/SKILL.md) — stress-test a plan or design through relentless interrogation
 - [`/write-a-prd`](skills/write-a-prd/SKILL.md) — interactive PRD creation through interview, codebase exploration, and module design
@@ -62,7 +62,7 @@ Changes to a skill file in the repo are immediately live — no copy or sync ste
 
 ### CLAUDE.md hygiene
 
-- **Triage the follow-ups list** — the Self-Correction Loop section in `~/.claude/CLAUDE.md` has 6 open follow-ups. Some are actionable now (memory-audit deployment, session-start memory report), others are speculative. Prioritize or prune before the list becomes a stale backlog.
+- **Triage the follow-ups list** — the Self-Correction Loop section in `~/.claude/CLAUDE.md` has open follow-ups. Some are actionable now (session-start memory report), others are speculative. Prioritize or prune before the list becomes a stale backlog.
 - ~~**Version-control global CLAUDE.md**~~ — Done. Tracked at `config/CLAUDE.md`, symlinked to `~/.claude/CLAUDE.md`.
 
 ### Skills
