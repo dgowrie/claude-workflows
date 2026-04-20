@@ -9,6 +9,7 @@ Personal defaults applied across all sessions and projects. Local `CLAUDE.md` fi
 - Be extremely concise. Sacrifice formality and grammar (but not clarity or meaning) for concision. Short summaries over extended breakdowns.
 - No flattery or compliments unless explicitly asked for judgment.
 - When uncertain about intent or direction, ask. Keep asking until ambiguity is fully resolved - don't guess.
+- **No em dashes anywhere.** Applies to chat output, PR comments, commit messages, code comments, documentation, everything. Use hyphens, commas, or semicolons.
 
 ---
 
@@ -152,7 +153,6 @@ On correction (user or self-caught): propose `CLAUDE.md` update **immediately, b
 - [Conventional Commits](https://www.conventionalcommits.org/): `type(scope): description`. Scope optional but preferred.
 - **Subject: 72 chars max.** Priority: (1) clear (2) conventional format (3) length. Body also 72-char wrapped.
 - **No `Co-Authored-By` trailers.** No "Generated with Claude Code" attribution.
-- **No em dashes in git-facing text.** Use hyphens, commas, or semicolons.
 - **Discrete commits per PR.** Map to logical units: config/types, tests, implementation, lint autofix.
 - **Lint autofix: always its own commit.**
 - **Never commit to default branch.** Always feature branch. Ask to confirm if on default branch.
