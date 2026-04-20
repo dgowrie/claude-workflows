@@ -1,35 +1,41 @@
 ---
 name: memory-audit
 description: >
-  Review and prune memory files across all Claude Code projects. Flags stale entries, oversized files,
-  vague index descriptions, and candidates for CLAUDE.md promotion. Use this skill periodically to
-  keep memory lean and effective. Trigger phrases: "audit memories", "clean up memories", "memory audit",
-  "prune memories", "review memories".
+  Review, consolidate, and prune a project's memory files. Merges duplicates, sharpens durable entries,
+  retires dated ones, fixes relative time references, flags oversized files, surfaces promotion
+  candidates for global CLAUDE.md, and tidies the `MEMORY.md` index. Defaults to the current project;
+  offers a cross-project sweep after - duplicated memories across projects are strong promotion signals.
+  Trigger phrases: "audit memories", "consolidate memories", "tidy up memory", "clean up memories",
+  "prune memories", "review memories", "merge memory files", "memory audit".
 ---
 
 # Memory Audit
 
-You are reviewing the user's Claude Code memory files for hygiene issues. The goal is to keep memory
-lean, relevant, and well-described so that the two-tier loading system (index always loaded, files
-loaded on demand) works efficiently.
+You are reviewing the user's Claude Code memory files for hygiene and consolidation. The goal is to keep memory lean, relevant, and well-described so that the two-tier loading system (index always loaded, files loaded on demand) works efficiently.
+
+## Tone
+
+This is a reflective pass, not just a checklist. As you evaluate, you're synthesizing what the user values, what's durable about how they work, and what belongs in future sessions. Separate the *durable* (preferences, working style, key relationships, recurring workflows) from the *dated* (specific projects, deadlines, one-off tasks). Keep and sharpen the durable; retire the dated or fold its lasting takeaway into a durable entry.
 
 ---
 
-## Step 1: Discover all memory locations
+## Step 1: Discover memory locations
 
-Find every `MEMORY.md` index file across all project scopes:
+Default to the current project's memory directory. Identify it from your system prompt's auto-memory section, or from `$PWD` mapped under `~/.claude/projects/`. Read its `MEMORY.md` index.
+
+After Step 4's report, offer a cross-project sweep. A memory that appears in multiple projects is a strong signal it belongs in global CLAUDE.md rather than any single project scope:
 
 ```bash
 find ~/.claude/projects -name "MEMORY.md" -type f
 ```
 
-Report how many project scopes have memories and the total entry count across all indexes.
+For the current-project default, report the number of entries. For a cross-project sweep, also report how many project scopes have memories and the total entry count.
 
 ---
 
 ## Step 2: Read all indexes
 
-Read each `MEMORY.md` file. For each entry, note:
+Read each `MEMORY.md` file in scope. For each entry, note:
 - The project scope it belongs to
 - The one-line description
 - The file it points to
@@ -40,13 +46,14 @@ Read each `MEMORY.md` file. For each entry, note:
 
 Read each referenced memory file and evaluate against these criteria:
 
-### Staleness
+### Staleness / durable vs dated
 
 Flag entries where:
 - The `type: project` memory references a PR that has been merged or closed
 - The memory references an issue that has been resolved
 - The memory contains dates more than 30 days old with no ongoing relevance
 - The subject of the memory is already reflected in the current codebase (check if applicable)
+- The memory is *dated* (about a specific project, deadline, or one-off task) and its window has passed - consider retiring it, or fold its lasting takeaway (e.g. "user prefers X format for launch docs") into a durable entry before deleting
 
 To verify PR/issue status, use:
 ```bash
@@ -60,22 +67,28 @@ Flag any memory file exceeding 2KB. These likely belong in a plan, repo document
 
 Report the file size for each memory.
 
+### Time references
+
+Flag memories containing relative date phrases ("next week", "this quarter", "by Friday") rather than absolute dates. Propose converting to absolute dates - relative phrasing becomes unreadable weeks after the memory was written.
+
+### Easy to re-find elsewhere
+
+Flag memories that merely restate information the user can pull from a calendar, docs, or connected tool on demand. Keep what's hard to re-derive: stated preferences, context behind a decision, who to go to for what.
+
 ### Index description quality
 
-Flag descriptions that are vague or non-filterable. A good description names the specific feature,
-issue number, or domain. Examples of bad descriptions:
+Flag descriptions that are vague or non-filterable. A good description names the specific feature, issue number, or domain. Examples of bad descriptions:
 - "project context notes"
 - "testing feedback"
 - "user preferences"
 
 ### Duplicates and overlap
 
-Flag entries that cover substantially the same ground. Propose merging into one.
+Flag entries that cover substantially the same ground within a scope. Propose merging into one file and keeping the richer file's path. On a cross-project sweep, duplicates *across* scopes are promotion candidates - see below.
 
 ### Promotion candidates
 
-Flag `type: feedback` memories that represent behavioral rules applicable across projects. These
-should be promoted to the global `~/.claude/CLAUDE.md` rather than staying project-scoped.
+Flag `type: feedback` memories that represent behavioral rules applicable across projects. These should be promoted to global `~/.claude/CLAUDE.md` rather than staying project-scoped. On cross-project sweeps, a memory appearing in multiple projects is a strong promotion signal - even if the user hasn't explicitly said "this is global."
 
 ---
 
@@ -86,15 +99,21 @@ Present findings in this format:
 ```
 ## Memory Audit — <date>
 
-**Scope:** <N> projects, <N> total memories
+**Scope:** <current project | N projects, N total memories>
 
 ### Actions
 
-#### Delete (stale)
+#### Delete (stale / dated)
 - `<project>/<file>` — <reason>
 
 #### Resize (>2KB)
 - `<project>/<file>` — <current size>, <suggestion>
+
+#### Fix time references
+- `<project>/<file>` — "<relative phrase>" → "<proposed absolute date>"
+
+#### Drop (easy to re-find elsewhere)
+- `<project>/<file>` — <reason>
 
 #### Improve description
 - `<project>/<file>` — current: "<description>" → suggested: "<better description>"
@@ -109,15 +128,20 @@ Present findings in this format:
 - `<project>/<file>` — OK
 ```
 
+If you ran on a single project only, end the report with an offer:
+> Want me to sweep all projects next? Cross-project duplicates are often promotion candidates for global CLAUDE.md.
+
 ---
 
 ## Step 5: Execute
 
 After presenting the report, ask which actions the user wants to take. Then execute them:
 
-- **Delete**: Remove the memory file and its MEMORY.md index entry
+- **Delete**: Remove the memory file and its `MEMORY.md` index entry
 - **Resize**: Propose a trimmed version of the file for user approval
-- **Improve description**: Update the MEMORY.md index entry
+- **Fix time references**: Update the memory file to replace relative dates with absolute ones
+- **Drop (easy to re-find)**: Remove the memory file and its `MEMORY.md` index entry
+- **Improve description**: Update the `MEMORY.md` index entry
 - **Merge**: Combine files, update index, delete the redundant file
 - **Promote**: Propose the CLAUDE.md addition, apply on confirmation, then delete the memory
 
