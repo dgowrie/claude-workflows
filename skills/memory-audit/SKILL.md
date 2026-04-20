@@ -22,15 +22,9 @@ This is a reflective pass, not just a checklist. As you evaluate, you're synthes
 
 ## Step 1: Discover memory locations
 
-Default to the current project's memory directory. Identify it from your system prompt's auto-memory section, or from `$PWD` mapped under `~/.claude/projects/`. Read its `MEMORY.md` index.
+Default to the current project's memory directory. Identify it from your system prompt's auto-memory section, or from `$PWD` mapped under `~/.claude/projects/`. Read its `MEMORY.md` index and report the entry count.
 
-After Step 4's report, offer a cross-project sweep. A memory that appears in multiple projects is a strong signal it belongs in global CLAUDE.md rather than any single project scope:
-
-```bash
-find ~/.claude/projects -name "MEMORY.md" -type f
-```
-
-For the current-project default, report the number of entries. For a cross-project sweep, also report how many project scopes have memories and the total entry count.
+A cross-project sweep is offered at the end of Step 4 (mechanics and rationale live there).
 
 ---
 
@@ -129,8 +123,17 @@ Present findings in this format:
 - `<project>/<file>` — OK
 ```
 
-If you ran on a single project only, end the report with an offer:
-> Want me to sweep all projects next? Cross-project duplicates are often promotion candidates for global CLAUDE.md.
+If you ran on a single project only, end the report with an explicit offer:
+
+> Want me to sweep all projects next? A memory that appears in multiple projects is a strong signal it belongs in global `CLAUDE.md` rather than any single project scope.
+
+On accept, run:
+
+```bash
+find ~/.claude/projects -name "MEMORY.md" -type f
+```
+
+Report how many project scopes have memories and the total entry count, then loop back through Steps 2-4 with the expanded scope before moving to Step 5.
 
 ---
 
