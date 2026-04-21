@@ -130,9 +130,46 @@ If `>= 1`: announce to the user (see Race-window protocol), then:
      }' -f id=<node_id>
    ```
 
-3. **Build the accumulator** at `/tmp/pr-review-batching-<pr-number>.json` from GraphQL
-   output. Preserve every body verbatim, including any `\r\n` line endings; do not normalize.
-   This captures whatever edits the user made in the browser.
+3. **Build the accumulator** at `/tmp/pr-review-batching-<pr-number>.json` from the GraphQL
+   output, translating field names to the REST review-comment payload schema. Preserve every
+   body verbatim, including any `\r\n` line endings; do not normalize. This captures whatever
+   edits the user made in the browser.
+
+   Required field mapping (GraphQL camelCase -> REST snake_case):
+
+   - `path` -> `path`
+   - `line` -> `line`
+   - `side` -> `side`
+   - `body` -> `body`
+   - `startLine` -> `start_line`
+   - `startSide` -> `start_side`
+
+   Omission rules for single-line comments: GraphQL returns `startLine: null` and
+   `startSide: null`. Omit `start_line` and `start_side` entirely from the accumulator object.
+   Do NOT send them as `null`, and do NOT leave them as camelCase keys.
+
+   Example accumulator entries built from GraphQL results:
+
+   ```json
+   {
+     "comments": [
+       {
+         "path": "src/example.ts",
+         "start_line": 18,
+         "line": 20,
+         "start_side": "RIGHT",
+         "side": "RIGHT",
+         "body": "Existing multi-line draft"
+       },
+       {
+         "path": "src/example.ts",
+         "line": 42,
+         "side": "RIGHT",
+         "body": "Existing single-line draft"
+       }
+     ]
+   }
+   ```
 
 4. **Append the new comment(s)** to the accumulator's `comments` array.
 
