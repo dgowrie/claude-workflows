@@ -299,32 +299,26 @@ One or two sentences stating the concern and why it matters.
 
 ---
 
-## Step 9: Offer to post to GitHub
+## Step 9: Offer to stage as drafts
 
 After presenting the review, ask:
 
-> Want me to post any of these to the PR? I can post all of them, specific ones, or just a
-> general review comment.
+> Want me to draft these as pending-review comments on the PR? I'll stage them as drafts; you
+> submit the review manually when you're ready.
 
-If yes, use `gh pr review` for general comments or the GitHub API for inline line-level comments:
+If the user confirms, hand off to the `pr-review-batching` skill with the list of comments
+(path, line / start_line, side / start_side, body per comment). That skill owns the
+submission lifecycle: detecting an existing pending review, appending without clobbering
+user-in-flight edits, and incident response if a review gets published by mistake.
 
-```bash
-# General review comment (non-approving)
-gh pr review <URL> --comment --body "<review body>"
+**Do NOT call `gh pr review` or `gh api .../pulls/.../reviews` with an `event` field from this
+skill.** Any `event=COMMENT | APPROVE | REQUEST_CHANGES` publishes the review immediately,
+which violates the user's convention that they submit manually. See
+`skills/pr-review-batching/SKILL.md` for the runbook.
 
-# Inline review (requires building a review via the API with per-file comment positions)
-gh api repos/{owner}/{repo}/pulls/{number}/reviews \
-  --method POST \
-  --field body="<overall comment>" \
-  --field event="COMMENT" \
-  --field "comments[][path]=src/foo.ts" \
-  --field "comments[][position]=<diff position>" \
-  --field "comments[][body]=<comment text>"
-```
-
-Note: GitHub inline comments use *diff position* (line offset within the diff hunk), not file line
-numbers. Calculate the diff position from `gh pr diff` output when posting inline. If this is
-complex, offer to post a consolidated general comment instead.
+If the user wants something other than a batched draft review (for example, a standalone
+non-inline review comment, or an explicit approval), confirm the intent explicitly before
+taking any action that changes PR state.
 
 ---
 

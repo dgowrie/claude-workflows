@@ -40,6 +40,7 @@ Skills in this repo are symlinked into `~/.claude/skills/`, making them globally
 Changes to a skill file in the repo are immediately live — no copy or sync step. For the full three-tier sync architecture (repo, global, Cowork), see [Skill Management](workflows/skill-management.md).
 
 - [`/pr-review`](skills/pr-review/SKILL.md) — AI-assisted GitHub PR review with line-level draft comments
+- [`/pr-review-batching`](skills/pr-review-batching/SKILL.md): stage PR review comments as drafts on a pending review (never publishes); owns ensure-then-append and accidental-publish incident response
 - [`/memory-audit`](skills/memory-audit/SKILL.md) — reflective review, consolidation, and pruning of memory files; defaults to current project, offers a cross-project sweep for promotion candidates
 - [`/branch-cleanup`](skills/branch-cleanup/SKILL.md) — interactive local branch cleanup with PR cross-referencing
 - [`/grill-me`](skills/grill-me/SKILL.md) — stress-test a plan or design through relentless interrogation
