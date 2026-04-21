@@ -203,10 +203,22 @@ Use when a review was accidentally submitted (state `COMMENTED`, `APPROVED`, or
 
 ### Step 1. Locate the published review
 
+List the current user's non-pending reviews, newest first:
+
 ```bash
 gh api repos/{owner}/{repo}/pulls/{n}/reviews \
-  --jq '.[] | select(.state != "PENDING") | select(.user.login == "<current-user>") | .id'
+  --jq '[.[] | select(.state != "PENDING") | select(.user.login == "<current-user>")]
+        | sort_by(.submitted_at) | reverse
+        | .[] | {id, state, submitted_at, body}'
 ```
+
+If this returns more than one review, **do not guess.** Present the list to the user
+(id, state, submitted_at, first line of body) and ask which one to treat as the accidental
+publish. The default selection is the most recent, but require explicit user confirmation
+before proceeding; Operation 2 is destructive (Step 3 deletes inline comments), and the
+wrong `review_id` damages an unrelated review.
+
+Record the confirmed `review_id` and use it for the remaining steps.
 
 ### Step 2. Save the review's comments
 
