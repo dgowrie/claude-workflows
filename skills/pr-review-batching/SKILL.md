@@ -192,7 +192,13 @@ If `>= 1`: announce to the user (see Race-window protocol), then:
 7. **On success:** delete `/tmp/pr-review-batching-<pr-number>.json`. On failure: leave it in
    place for debug inspection.
 
-8. **Announce done** to the user (see Race-window protocol).
+   If Step 6 POST failed after Step 5 DELETE succeeded, the pending review no longer exists
+   on the server and the user's prior drafts are unrecoverable from GitHub. Tell the user
+   explicitly (do NOT send the Race-window "Sync done" message); point them at the preserved
+   accumulator at `/tmp/pr-review-batching-<pr-number>.json`, which can be retried with
+   `gh api repos/{owner}/{repo}/pulls/{n}/reviews --method POST --input <path>`.
+
+8. **Announce done** to the user (see Race-window protocol). Only on POST success.
 
 ---
 
