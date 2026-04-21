@@ -280,6 +280,10 @@ wait for acknowledgement, since the action was already approved.
 
 ## Technical notes
 
+- **Line numbers, not diff positions.** Review-comment payloads use `line` and `start_line`
+  (file line numbers at the PR head SHA). The legacy `position` field (diff-hunk offset) is
+  not needed and is not used anywhere in this skill; do not reach for it even if older docs or
+  examples suggest otherwise.
 - **Multi-line comments.** REST's `/reviews/{id}/comments` returns `position` and
   `original_position` (end-of-span only) for pending comments; it does NOT return `startLine`
   or `line`. Use the GraphQL `node(id: ...)` query for round-trip fidelity.
