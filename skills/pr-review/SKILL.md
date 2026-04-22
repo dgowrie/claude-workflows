@@ -237,6 +237,34 @@ gh api repos/{owner}/{repo}/pulls/{pull_number}/comments/{comment_id}/replies \
 
 Note: the pull number is required in the path. The comment-level GET endpoint (`/pulls/comments/{id}`) omits it, but the reply POST does not; `/pulls/comments/{id}/replies` returns 404.
 
+### Resolving threads after reply
+
+After replying to bot review threads, resolve every thread that received a definitive reply (accepted or rejected). An open thread signals "still needs attention"; a replied-to rejection is definitively addressed and should be resolved too. Timing depends on how the reply was posted:
+
+- **Direct reply** (REST `/pulls/{n}/comments/{id}/replies`): reply is immediately published. Resolve right after posting.
+- **Staged as pending review draft** (via `pr-review-batching`): reply is only visible to the author until the user submits the review. Do NOT resolve until after submission. Resolving before publication leaves other reviewers seeing a resolved thread with no visible rationale (worse than silent dismissal).
+
+There is no technical guard; `resolveReviewThread` succeeds regardless of whether a reply exists or is published. The constraint is purely workflow correctness.
+
+Use the GraphQL mutation with the thread's node ID:
+
+```bash
+gh api graphql -f query='mutation {
+  resolveReviewThread(input: {threadId: "<PRRT_node_id>"}) {
+    thread { isResolved }
+  }
+}'
+```
+
+Batch multiple resolutions into a single GraphQL call using aliases:
+
+```bash
+gh api graphql -f query='mutation {
+  t1: resolveReviewThread(input: {threadId: "<id1>"}) { thread { isResolved } }
+  t2: resolveReviewThread(input: {threadId: "<id2>"}) { thread { isResolved } }
+}'
+```
+
 ---
 
 ## Step 7: Before you write a comment, verify it
