@@ -193,10 +193,11 @@ After pushing a new PR, watch for bot review comments (Copilot, Codex, etc.).
 ## PR Review Conventions
 
 **Addressing feedback** (human and bot):
-- Accepted: reply `:zap: <commit hash>`, minimal commentary. Resolve the thread.
+- Accepted: reply `:zap: <commit hash>`, minimal commentary.
 - Rejected: reply with brief rationale.
 - Batch trivial fixes; non-trivial gets its own commit.
-- **Resolve threads via `resolveReviewThread` GraphQL mutation** - never `minimizeComment`.
+- **Resolve every thread with a definitive reply, after that reply is published.** Applies to both accepted and rejected. If replies are staged as pending review drafts, wait until the user submits the review before resolving; resolving before publication leaves other reviewers seeing a resolved thread with no visible rationale (invisible dismissal). An open thread signals "still needs attention"; a resolved thread with no visible reply signals "invisible dismissal."
+- Use `resolveReviewThread` GraphQL mutation; never `minimizeComment`.
 
 **Posting reviews on my behalf:**
 - Never post comments individually. Use pending review mechanism.
