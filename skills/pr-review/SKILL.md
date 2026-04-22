@@ -211,6 +211,32 @@ Preserve thread `id`, comment `id`, and comment `url` for linking findings back 
 
 If no bots have commented on the PR, note `No bot reviews present.` and move on — don't fabricate coverage.
 
+### ID type caveat
+
+The GraphQL query above returns **node IDs** (base64-encoded, e.g. `PRRC_kwDONPDiQc6585CE` for comments, `PRRT_kwDONPDiQc58mSmJ` for threads). REST endpoints for replying to comments require **numeric IDs**. Two options when addressing a thread:
+
+1. **Stay in GraphQL for mutations**: use `addPullRequestReviewComment` with `inReplyTo: <comment_node_id>` and `resolveReviewThread` with `threadId: <thread_node_id>`. No ID translation needed.
+2. **Fetch numeric IDs from REST** before replying:
+
+   ```bash
+   gh api repos/{owner}/{repo}/pulls/{n}/comments \
+     --jq '.[] | {id, body: .body[:60], user: .user.login}'
+   ```
+
+   Then use the numeric `id` in the reply endpoint below.
+
+Option 1 is preferred when posting replies as part of a pending review (aligns with `pr-review-batching`). Option 2 is simpler for standalone thread replies outside a review.
+
+### Replying to review threads (REST)
+
+```bash
+# Reply to a specific review comment thread
+gh api repos/{owner}/{repo}/pulls/{pull_number}/comments/{comment_id}/replies \
+  -f body=':zap: <commit_hash>'
+```
+
+Note: the pull number is required in the path. The comment-level GET endpoint (`/pulls/comments/{id}`) omits it, but the reply POST does not; `/pulls/comments/{id}/replies` returns 404.
+
 ---
 
 ## Step 7: Before you write a comment, verify it
