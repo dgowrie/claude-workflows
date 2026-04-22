@@ -147,6 +147,14 @@ On correction (user or self-caught): propose `CLAUDE.md` update **immediately, b
 
 ---
 
+## External API Calls
+
+- **Probe once, then parallelize.** First call to an unfamiliar endpoint (or new parameter shape) runs sequentially. Only parallelize siblings after that probe succeeds. Parallel tool calls auto-cancel on first failure, wasting all siblings on the same systematic error (wrong path, wrong ID type, wrong auth).
+- **Prefer `gh api --jq '<filter>'` over `gh api ... | jq '<filter>'`.** The `--jq` flag applies only on success; API errors print raw to stderr, preserving the real failure. External `jq` processes error HTML identically to JSON, producing parse errors that mask the underlying issue. For first probes, omit jq entirely to see the raw response.
+- **GraphQL node IDs ≠ REST numeric IDs.** Base64 node IDs (e.g. `PRRC_kwDO...`) returned by GraphQL are not interchangeable with numeric IDs required by REST endpoints. Translate deliberately, or stay in one API surface for the full read-mutate cycle.
+
+---
+
 ## Git Conventions
 
 - [Conventional Commits](https://www.conventionalcommits.org/): `type(scope): description`. Scope optional but preferred.
@@ -185,10 +193,11 @@ After pushing a new PR, watch for bot review comments (Copilot, Codex, etc.).
 ## PR Review Conventions
 
 **Addressing feedback** (human and bot):
-- Accepted: reply `:zap: <commit hash>`, minimal commentary. Resolve the thread.
+- Accepted: reply `:zap: <commit hash>`, minimal commentary.
 - Rejected: reply with brief rationale.
 - Batch trivial fixes; non-trivial gets its own commit.
-- **Resolve threads via `resolveReviewThread` GraphQL mutation** - never `minimizeComment`.
+- **Resolve every thread with a definitive reply, after that reply is published.** Applies to both accepted and rejected. If replies are staged as pending review drafts, wait until the user submits the review before resolving; resolving before publication leaves other reviewers seeing a resolved thread with no visible rationale (invisible dismissal). An open thread signals "still needs attention"; a resolved thread with no visible reply signals "invisible dismissal."
+- Use `resolveReviewThread` GraphQL mutation; never `minimizeComment`.
 
 **Posting reviews on my behalf:**
 - Never post comments individually. Use pending review mechanism.
