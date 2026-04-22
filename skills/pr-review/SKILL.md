@@ -219,7 +219,7 @@ The GraphQL query above returns **node IDs** (base64-encoded, e.g. `PRRC_kwDONPD
 2. **Fetch numeric IDs from REST** before replying:
 
    ```bash
-   gh api repos/{owner}/{repo}/pulls/{n}/comments \
+   gh api repos/{owner}/{repo}/pulls/{pull_number}/comments \
      --jq '.[] | {id, body: .body[:60], user: .user.login}'
    ```
 
@@ -241,7 +241,7 @@ Note: the pull number is required in the path. The comment-level GET endpoint (`
 
 After replying to bot review threads, resolve every thread that received a definitive reply (accepted or rejected). An open thread signals "still needs attention"; a replied-to rejection is definitively addressed and should be resolved too. Timing depends on how the reply was posted:
 
-- **Direct reply** (REST `/pulls/{n}/comments/{id}/replies`): reply is immediately published. Resolve right after posting.
+- **Direct reply** (REST `/pulls/{pull_number}/comments/{id}/replies`): reply is immediately published. Resolve right after posting.
 - **Staged as pending review draft** (via `pr-review-batching`): reply is only visible to the author until the user submits the review. Do NOT resolve until after submission. Resolving before publication leaves other reviewers seeing a resolved thread with no visible rationale (worse than silent dismissal).
 
 There is no technical guard; `resolveReviewThread` succeeds regardless of whether a reply exists or is published. The constraint is purely workflow correctness.
