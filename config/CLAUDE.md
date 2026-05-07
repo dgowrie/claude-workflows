@@ -174,11 +174,12 @@ When asked, post review-guidance comments on our own PRs to help peer reviewers 
 
 **Inline comments** (on specific diff lines):
 - Prefix every inline comment with :notebook: so reviewers can visually distinguish author guidance from review feedback.
-- Preempt "why?" questions: non-obvious decisions, subtle constraints, intentional deviations from convention.
+- **When to add:** dense logic (regex, merge semantics), intentional tradeoffs (tech debt, relaxed assertions), subtle constraints, anything where "why did they do it this way?" is a predictable question.
+- **When not to:** obvious changes, trivial additions, anything the PR description or walkthrough already covers.
 - Flag risk: "this is the tricky part", "correctness depends on X invariant".
-- Keep each comment to one or two sentences. If it needs more, the code needs a real comment instead.
+- Keep each comment to one or two sentences. Link to PRD/issue if the context lives there. If it needs more, the code needs a real comment instead.
 
 **Mechanics:**
-- Use the pending review mechanism (never post individually).
+- Stage as pending review drafts (pr-review-batching skill). Never post individually.
 - Present the batch for confirmation before posting, same as any other review.
 - Don't duplicate information already in the PR description or commit messages; reference them instead.
