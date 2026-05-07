@@ -6,7 +6,7 @@ user-invocable: true
 
 # Setup Cowork
 
-Help the user get Cowork configured for their work. Five steps — role, plugins, connectors, try a skill, wrap.
+Help the user get Cowork configured for their work. Five user-facing steps — role, plugins, connectors, try a skill, wrap — preceded by a hidden Step 0 (checklist setup) that runs before the first message.
 
 ## Step 0 — Checklist
 
