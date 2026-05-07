@@ -127,7 +127,7 @@ On correction (user or self-caught): propose `CLAUDE.md` update **immediately, b
 
 - [Conventional Commits](https://www.conventionalcommits.org/): `type(scope): description`. Scope optional but preferred.
 - **Subject: 72 chars max.** Priority: (1) clear (2) conventional format (3) length. Body also 72-char wrapped.
-- **No `Co-Authored-By` trailers.** No "Generated with Claude Code" attribution.
+- **No `Co-Authored-By` trailers.** No "Generated with Claude Code" attribution. Applies everywhere: commits, PR descriptions, issue bodies, comments.
 - **Discrete commits per PR.** Map to logical units: config/types, tests, implementation, lint autofix.
 - **Lint autofix: always its own commit.**
 - **Never commit to default branch.** Always feature branch. Ask to confirm if on default branch.
