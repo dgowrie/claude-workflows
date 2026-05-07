@@ -162,3 +162,22 @@ After pushing a new PR, watch for bot review comments (Copilot, Codex, etc.).
 **Posting reviews on my behalf:**
 - Never post comments individually. Use pending review mechanism.
 - Present batch for confirmation; I submit manually to control review event type.
+
+## Author Review Guidance
+
+When asked, post review-guidance comments on our own PRs to help peer reviewers navigate the changes. Two parts:
+
+**Walkthrough comment** (top-level, posted first):
+- One-paragraph summary of what changed and why.
+- Ordered list of files/areas to review, in suggested reading order. Each entry: file path, one sentence on what changed there, and why that order helps comprehension.
+- Call out anything the reviewer should *not* spend time on (e.g., mechanical renames, generated code).
+
+**Inline comments** (on specific diff lines):
+- Preempt "why?" questions: non-obvious decisions, subtle constraints, intentional deviations from convention.
+- Flag risk: "this is the tricky part", "correctness depends on X invariant".
+- Keep each comment to one or two sentences. If it needs more, the code needs a real comment instead.
+
+**Mechanics:**
+- Use the pending review mechanism (never post individually).
+- Present the batch for confirmation before posting, same as any other review.
+- Don't duplicate information already in the PR description or commit messages; reference them instead.
