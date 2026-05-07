@@ -165,14 +165,14 @@ After pushing a new PR, watch for bot review comments (Copilot, Codex, etc.).
 
 ## Author Review Guidance
 
-When asked, post review-guidance comments on our own PRs to help peer reviewers navigate the changes. Two parts:
+When asked, post review-guidance comments on our own PRs to help peer reviewers navigate the changes. Everything ships as a **single review submission** with the walkthrough as the review body and inline comments threaded below it.
 
-**Walkthrough comment** (top-level, posted first):
+**Walkthrough** (the review body):
 - One-paragraph summary of what changed and why.
 - Ordered list of files/areas to review, in suggested reading order. Each entry: file path, one sentence on what changed there, and why that order helps comprehension.
 - Call out anything the reviewer should *not* spend time on (e.g., mechanical renames, generated code).
 
-**Inline comments** (on specific diff lines):
+**Inline comments** (threaded under the walkthrough, on specific diff lines):
 - Prefix every inline comment with :notebook: so reviewers can visually distinguish author guidance from review feedback.
 - **When to add:** dense logic (regex, merge semantics), intentional tradeoffs (tech debt, relaxed assertions), subtle constraints, anything where "why did they do it this way?" is a predictable question.
 - **When not to:** obvious changes, trivial additions, anything the PR description or walkthrough already covers.
@@ -180,6 +180,6 @@ When asked, post review-guidance comments on our own PRs to help peer reviewers 
 - Keep each comment to one or two sentences. Link to PRD/issue if the context lives there. If it needs more, the code needs a real comment instead.
 
 **Mechanics:**
-- Stage as pending review drafts (pr-review-batching skill). Never post individually.
+- Stage as pending review drafts (pr-review-batching skill). The walkthrough goes in the review body; inline comments attach to diff lines. All submitted as one review.
 - Present the batch for confirmation before posting, same as any other review.
 - Don't duplicate information already in the PR description or commit messages; reference them instead.
