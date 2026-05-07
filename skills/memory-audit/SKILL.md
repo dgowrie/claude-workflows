@@ -1,5 +1,6 @@
 ---
 name: memory-audit
+user-invocable: true
 description: >
   Review, consolidate, and prune a project's memory files. Merges duplicates, sharpens durable entries,
   retires dated ones, fixes relative time references, flags oversized files, surfaces promotion
