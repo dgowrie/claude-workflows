@@ -156,9 +156,10 @@ After pushing a new PR, watch for bot review comments (Copilot, Codex, etc.).
 
 **Addressing feedback** (human and bot):
 - Accepted: reply `:zap: <commit hash>`, minimal commentary.
-- Rejected: reply with brief rationale.
+- Rejected: reply `:thought_balloon: <brief rationale>`.
 - Batch trivial fixes; non-trivial gets its own commit.
-- **Resolve every thread with a definitive reply, after that reply is published.** Applies to both accepted and rejected. If replies are staged as pending review drafts, wait until the user submits the review before resolving; resolving before publication leaves other reviewers seeing a resolved thread with no visible rationale (invisible dismissal). An open thread signals "still needs attention"; a resolved thread with no visible reply signals "invisible dismissal."
+- **Only resolve threads we authored.** Reviewer threads (human and bot) stay open after we reply so human reviewers can see what was flagged, how it was addressed, and weigh in if needed.
+- For our own threads: resolve after the reply is published. If replies are staged as pending review drafts, wait until the review is submitted before resolving.
 - Use `resolveReviewThread` GraphQL mutation; never `minimizeComment`.
 
 **Posting reviews on my behalf:**
