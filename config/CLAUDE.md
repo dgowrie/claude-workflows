@@ -173,6 +173,7 @@ When asked, post review-guidance comments on our own PRs to help peer reviewers 
 - Call out anything the reviewer should *not* spend time on (e.g., mechanical renames, generated code).
 
 **Inline comments** (on specific diff lines):
+- Prefix every inline comment with :notebook: so reviewers can visually distinguish author guidance from review feedback.
 - Preempt "why?" questions: non-obvious decisions, subtle constraints, intentional deviations from convention.
 - Flag risk: "this is the tricky part", "correctness depends on X invariant".
 - Keep each comment to one or two sentences. If it needs more, the code needs a real comment instead.
