@@ -43,7 +43,7 @@ Four sections. Pause after each for feedback:
 3. **Open questions & assumptions** - unresolved questions; unconfirmed assumptions
 4. **Risks & alternatives** - uncertainty, rejected alternatives with brief reasoning
 
-Keep plans extremely concise. Sacrifice grammar for concision. No abstract design discussion unless explicitly working through tradeoffs.
+Keep plans extremely concise. No abstract design discussion unless explicitly working through tradeoffs.
 
 When a meaningful implementation fork exists: summarize options concretely, state tradeoffs, give opinionated recommendation, ask for input.
 
@@ -182,6 +182,5 @@ When asked, post review-guidance comments on our own PRs to help peer reviewers 
 - Keep each comment to one or two sentences. Link to PRD/issue if the context lives there. If it needs more, the code needs a real comment instead.
 
 **Mechanics:**
-- Stage as pending review drafts (pr-review-batching skill). The walkthrough goes in the review body; inline comments attach to diff lines. All submitted as one review.
-- Present the batch for confirmation before posting, same as any other review.
+- Stage via pr-review-batching skill; same posting conventions as any other review (pending mechanism, present for confirmation).
 - Don't duplicate information already in the PR description or commit messages; reference them instead.
