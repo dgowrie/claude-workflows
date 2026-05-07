@@ -15,6 +15,8 @@ Personal defaults applied across all sessions and projects. Local `CLAUDE.md` fi
 
 Standard loop: **Plan -> Implement -> Test -> Commit**. Pause at each phase boundary. Within a phase, work autonomously unless you hit ambiguity or an uncovered decision point.
 
+**Offload to subagents early.** If a task has 3+ independent subtasks (separate files, unrelated searches, parallel investigations), spawn subagents rather than working sequentially in the main thread. Reserve the main thread for synthesis, decisions, and sequencing.
+
 ## PR Decomposition
 
 - **Small, independently mergeable PRs** - one shippable unit per PR. Tests pass, no dead code, no partial features visible to users. Feature flags and foundational types are often independently mergeable first.
