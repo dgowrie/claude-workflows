@@ -1,5 +1,9 @@
 # Claude Code Sandbox Mode Evaluation
 
+How sandbox mode works, what it restricts, and when to use it vs. Docker isolation.
+
+---
+
 ## Enabling Sandbox Mode
 
 ### Via settings.json (persistent, silent)
@@ -25,6 +29,8 @@ Opens a menu to choose between auto-allow and regular permissions. Can toggle mi
 - **Linux/WSL2**: install `bubblewrap` and `socat`
 - **WSL1**: not supported
 
+---
+
 ## What the Sandbox Restricts
 
 ### Filesystem
@@ -47,6 +53,8 @@ Opens a menu to choose between auto-allow and regular permissions. Can toggle mi
 
 OS-level (Seatbelt on macOS, bubblewrap on Linux). All child processes inherit restrictions.
 
+---
+
 ## Auto-Allow Mode Security Boundaries
 
 ### Auto-allows (no prompts)
@@ -60,7 +68,8 @@ OS-level (Seatbelt on macOS, bubblewrap on Linux). All child processes inherit r
 - Remote-modifying commands (`git push`, `gh pr create`, `gh api` POST/DELETE)
 - Writes outside CWD (unless explicitly allowed)
 - Network to unapproved domains
-- Edit/Write/Read tools (governed by their own permission rules)
+
+---
 
 ## Risk Assessment (repo-scoped session)
 
@@ -74,6 +83,8 @@ OS-level (Seatbelt on macOS, bubblewrap on Linux). All child processes inherit r
 | Modifies git/shell config | Blocked | Protected path |
 | Malicious subprocess escapes | Blocked | OS-enforced |
 
+---
+
 ## Native Sandbox vs Docker
 
 | Feature | Native Sandbox | Docker Container |
@@ -84,7 +95,7 @@ OS-level (Seatbelt on macOS, bubblewrap on Linux). All child processes inherit r
 | Network | Domain-level filtering | Complete isolation unless ports exposed |
 | Dev workflow | IDE, shell, tools seamless | Must enter container; separate tooling |
 | Isolation strength | OS sandbox primitives | Full kernel-level isolation (stronger) |
-| Escape difficulty | `dangerouslyDisableSandbox` exists | Harder (unless `--privileged`) |
+| Escape difficulty | `dangerouslyDisableSandbox` flag (prompts user) | Harder (unless `--privileged`) |
 
 ### When native sandbox fits
 
