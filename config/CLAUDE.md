@@ -118,6 +118,17 @@ On correction (user or self-caught): propose `CLAUDE.md` update **immediately, b
 - **Write/destructive/irreversible: ask first.** `git`/`gh` writes, file deletions, state-modifying commands, side-effecting API calls.
 - Local `CLAUDE.md` may add project-specific permissions or restrictions.
 
+## Sandbox Workaround (interim - remove when #25 is resolved)
+
+Two sandbox restrictions break GitHub operations. Use `dangerouslyDisableSandbox: true` **only** for:
+
+- **`gh` CLI commands** (`gh api`, `gh pr`, `gh issue`, `gh run`) - corporate proxy TLS causes `x509: OSStatus -26276`
+- **`git push`, `git fetch`, `git clone`** against `github.com` remotes - sandbox blocks the 1Password SSH agent socket
+
+Don't retry inside the sandbox first; go straight to `dangerouslyDisableSandbox` for the commands above. Both issues tracked in #25.
+
+- Do not use `dangerouslyDisableSandbox` for `curl`, arbitrary HTTP calls, or SSH to non-GitHub hosts. If needed, ask for explicit permission first.
+
 ## External API Calls
 
 - **Probe once, then parallelize.** First call to an unfamiliar endpoint (or new parameter shape) runs sequentially. Only parallelize siblings after that probe succeeds. Parallel tool calls auto-cancel on first failure, wasting all siblings on the same systematic error (wrong path, wrong ID type, wrong auth).
