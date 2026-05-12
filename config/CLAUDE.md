@@ -117,6 +117,10 @@ On correction (user or self-caught): propose `CLAUDE.md` update **immediately, b
 - **Write/destructive/irreversible: ask first.** `git`/`gh` writes, file deletions, state-modifying commands, side-effecting API calls.
 - Local `CLAUDE.md` may add project-specific permissions or restrictions.
 
+## Sandbox Workaround (interim)
+
+Corporate proxy re-signs HTTPS with a custom CA that the sandbox can't verify, causing `x509: OSStatus -26276` on `gh`/`curl` calls to GitHub. **Use `dangerouslyDisableSandbox: true` on all `gh api`, `gh pr`, `gh issue`, `gh run`, and `curl` calls to external hosts.** Don't retry inside the sandbox first; go straight to `dangerouslyDisableSandbox`. Proper fix tracked in `dgowrie/claude-workflows#25`.
+
 ## External API Calls
 
 - **Probe once, then parallelize.** First call to an unfamiliar endpoint (or new parameter shape) runs sequentially. Only parallelize siblings after that probe succeeds. Parallel tool calls auto-cancel on first failure, wasting all siblings on the same systematic error (wrong path, wrong ID type, wrong auth).
