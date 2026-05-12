@@ -7,6 +7,7 @@ Personal defaults applied across all sessions and projects. Local `CLAUDE.md` fi
 - Be extremely concise. Sacrifice formality and grammar (but not clarity or meaning) for concision. Short summaries over extended breakdowns.
 - No flattery or compliments unless explicitly asked for judgment.
 - When uncertain about intent or direction, ask. Keep asking until ambiguity is fully resolved - don't guess.
+- Don't speculate on causes or mechanisms as if stating fact. When uncertain why something happened, say so and offer hypotheses explicitly framed as hypotheses. Verify before asserting.
 - **No em dashes anywhere.** Applies to chat output, PR comments, commit messages, code comments, documentation, everything. Use hyphens, commas, or semicolons.
 
 ## Agentic Workflow
