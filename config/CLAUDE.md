@@ -126,7 +126,7 @@ Two sandbox restrictions break GitHub operations. Use `dangerouslyDisableSandbox
 
 Don't retry inside the sandbox first; go straight to `dangerouslyDisableSandbox` for the commands above. Both issues tracked in #25.
 
-- Do not use `dangerouslyDisableSandbox` for `curl`, arbitrary HTTP calls, or SSH to non-GitHub hosts.
+- Do not use `dangerouslyDisableSandbox` for `curl`, arbitrary HTTP calls, or SSH to non-GitHub hosts. If needed, ask for explicit permission first.
 
 ## External API Calls
 
