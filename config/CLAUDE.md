@@ -124,7 +124,9 @@ Two sandbox restrictions break GitHub operations. Use `dangerouslyDisableSandbox
 - **`gh` CLI commands** (`gh api`, `gh pr`, `gh issue`, `gh run`) - corporate proxy TLS causes `x509: OSStatus -26276`
 - **`git push`, `git fetch`, `git clone`** against `github.com` remotes - sandbox blocks the 1Password SSH agent socket
 
-Do not use `dangerouslyDisableSandbox` for `curl`, arbitrary HTTP calls, or SSH to non-GitHub hosts. Don't retry inside the sandbox first; go straight to `dangerouslyDisableSandbox` for the commands above. Both issues tracked in #25.
+Don't retry inside the sandbox first; go straight to `dangerouslyDisableSandbox` for the commands above. Both issues tracked in #25.
+
+- Do not use `dangerouslyDisableSandbox` for `curl`, arbitrary HTTP calls, or SSH to non-GitHub hosts.
 
 ## External API Calls
 
