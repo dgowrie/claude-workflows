@@ -117,9 +117,14 @@ On correction (user or self-caught): propose `CLAUDE.md` update **immediately, b
 - **Write/destructive/irreversible: ask first.** `git`/`gh` writes, file deletions, state-modifying commands, side-effecting API calls.
 - Local `CLAUDE.md` may add project-specific permissions or restrictions.
 
-## Sandbox Workaround (interim)
+## Sandbox Workaround (interim - remove when #25 is resolved)
 
-Corporate proxy re-signs HTTPS with a custom CA that the sandbox can't verify, causing `x509: OSStatus -26276` on `gh`/`curl` calls to GitHub. **Use `dangerouslyDisableSandbox: true` on all `gh api`, `gh pr`, `gh issue`, `gh run`, and `curl` calls to external hosts.** Don't retry inside the sandbox first; go straight to `dangerouslyDisableSandbox`. Proper fix tracked in `dgowrie/claude-workflows#25`.
+Two sandbox restrictions require `dangerouslyDisableSandbox: true` as a workaround:
+
+1. **TLS/proxy:** Corporate proxy re-signs HTTPS with a custom CA the sandbox can't verify, causing `x509: OSStatus -26276`. Affects `gh api`, `gh pr`, `gh issue`, `gh run`, `curl` to external hosts.
+2. **SSH:** Sandbox blocks the 1Password SSH agent socket, breaking `git push`, `git fetch`, `git clone` over SSH.
+
+**Use `dangerouslyDisableSandbox: true` on all commands that hit external hosts or use SSH.** Don't retry inside the sandbox first; go straight to `dangerouslyDisableSandbox`. Both issues tracked in #25.
 
 ## External API Calls
 
