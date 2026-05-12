@@ -119,12 +119,12 @@ On correction (user or self-caught): propose `CLAUDE.md` update **immediately, b
 
 ## Sandbox Workaround (interim - remove when #25 is resolved)
 
-Two sandbox restrictions require `dangerouslyDisableSandbox: true` as a workaround:
+Two sandbox restrictions break GitHub operations. Use `dangerouslyDisableSandbox: true` **only** for:
 
-1. **TLS/proxy:** Corporate proxy re-signs HTTPS with a custom CA the sandbox can't verify, causing `x509: OSStatus -26276`. Affects `gh api`, `gh pr`, `gh issue`, `gh run`, `curl` to external hosts.
-2. **SSH:** Sandbox blocks the 1Password SSH agent socket, breaking `git push`, `git fetch`, `git clone` over SSH.
+- **`gh` CLI commands** (`gh api`, `gh pr`, `gh issue`, `gh run`) - corporate proxy TLS causes `x509: OSStatus -26276`
+- **`git push`, `git fetch`, `git clone`** against `github.com` remotes - sandbox blocks the 1Password SSH agent socket
 
-**Use `dangerouslyDisableSandbox: true` on all commands that hit external hosts or use SSH.** Don't retry inside the sandbox first; go straight to `dangerouslyDisableSandbox`. Both issues tracked in #25.
+Do not use `dangerouslyDisableSandbox` for `curl`, arbitrary HTTP calls, or SSH to non-GitHub hosts. Don't retry inside the sandbox first; go straight to `dangerouslyDisableSandbox` for the commands above. Both issues tracked in #25.
 
 ## External API Calls
 
