@@ -145,6 +145,8 @@ Don't retry inside the sandbox first; go straight to `dangerouslyDisableSandbox`
 - **Never commit to default branch.** Always feature branch. Ask to confirm if on default branch.
 - **Start from fresh main.** Fetch, update, branch before new work.
 - **Never amend with open PR.** Creates force-push, loses review context. Always new commit.
+- **Amending unpushed commits is always fine.** No confirmation needed when the commit hasn't been pushed.
+- **Sync open PRs via merge, not rebase.** `git merge origin/main` preserves review timeline. Only rebase if the PR is draft/unshared or explicitly requested.
 
 ## CI Watch
 
