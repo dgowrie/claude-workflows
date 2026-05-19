@@ -4,11 +4,11 @@ Personal defaults applied across all sessions and projects. Local `CLAUDE.md` fi
 
 ## Tone and Behavior
 
-- Be extremely concise. Sacrifice formality and grammar (but not clarity or meaning) for concision. Short summaries over extended breakdowns.
+- Be extremely concise. Sacrifice formality and grammar (but not clarity or meaning) for concision.
 - No flattery or compliments unless explicitly asked for judgment.
-- When uncertain about intent or direction, ask. Keep asking until ambiguity is fully resolved - don't guess.
-- Don't speculate on causes or mechanisms as if stating fact. When uncertain why something happened, say so and offer hypotheses explicitly framed as hypotheses. Verify before asserting.
-- **No em dashes anywhere.** Applies to chat output, PR comments, commit messages, code comments, documentation, everything. Use hyphens, commas, or semicolons.
+- When uncertain about intent or direction, ask. Keep asking until ambiguity is fully resolved.
+- Don't speculate as if stating fact. When uncertain, say so and frame hypotheses as hypotheses.
+- **No em dashes anywhere.** Use hyphens, commas, or semicolons.
 
 ## Agentic Workflow
 
@@ -16,21 +16,18 @@ Personal defaults applied across all sessions and projects. Local `CLAUDE.md` fi
 
 Standard loop: **Plan -> Implement (red/green/refactor) -> Validate -> Commit**. Pause at each phase boundary. Within a phase, work autonomously unless you hit ambiguity or an uncovered decision point.
 
-**Offload to subagents early.** If a task has 3+ independent subtasks (separate files, unrelated searches, parallel investigations), spawn subagents rather than working sequentially in the main thread. Reserve the main thread for synthesis, decisions, and sequencing.
+**Offload to subagents early.** If a task has 3+ independent subtasks, spawn subagents rather than working sequentially. Reserve the main thread for synthesis, decisions, and sequencing.
 
 ## PR Decomposition
 
 - **Small, independently mergeable PRs** - one shippable unit per PR. Tests pass, no dead code, no partial features visible to users. Feature flags and foundational types are often independently mergeable first.
-- **Sequential PRs to main** is the default. Each merges independently; next PR starts from updated main.
-- **Stacked PRs** only when changes are genuinely interdependent. Rebasing overhead isn't worth it when work can be sequential.
+- **Sequential PRs to main** is the default. **Stacked PRs** only when changes are genuinely interdependent.
 
 ## Concurrent Workstreams
 
-When preparing parallel work (multiple Claude sessions, AFK periods, handoffs):
-
-- **Genuinely independent units only.** No file-level overlap, no import dependencies, each mergeable alone. If B imports from A, they're sequential.
-- **Shared prerequisites go first.** Types, config, feature flags needed by multiple workstreams land in a small PR before parallel work begins.
-- **Each workstream gets its own branch** (and git worktree for concurrent sessions). Never two workstreams on one branch.
+- **Genuinely independent units only.** No file-level overlap, no import dependencies. If B imports from A, they're sequential.
+- **Shared prerequisites go first.** Types, config, feature flags needed by multiple workstreams land before parallel work begins.
+- **Each workstream gets its own branch** (and git worktree for concurrent sessions).
 - **Rename branch when scope changes.** Worktree directory name is immutable - flag the mismatch but don't try to fix it.
 - **Before going AFK**: push all branches, open PRs (draft if needed), leave clear next-step notes.
 - **Don't force concurrency.** If the dependency chain is linear, sequential is faster.
@@ -41,131 +38,114 @@ Four sections. Pause after each for feedback:
 
 1. **Goal & scope** - what and why
 2. **Implementation steps** - concrete, file-level changes
-3. **Open questions & assumptions** - unresolved questions; unconfirmed assumptions
-4. **Risks & alternatives** - uncertainty, rejected alternatives with brief reasoning
+3. **Open questions & assumptions**
+4. **Risks & alternatives** - rejected alternatives with brief reasoning
 
 Keep plans extremely concise. No abstract design discussion unless explicitly working through tradeoffs.
 
-When a meaningful implementation fork exists: summarize options concretely, state tradeoffs, give opinionated recommendation, ask for input.
+When a meaningful implementation fork exists: summarize options concretely, state tradeoffs, recommend one, ask.
 
 User may invoke `/grill-me` before implementation to stress-test the plan.
 
 ### Picking up an existing plan
 
-Before implementing against an existing plan:
+Review thoroughly, compare against codebase, flag gaps/ambiguities/mismatches.
 
-- Review thoroughly. Flag gaps, ambiguities, inconsistencies.
-- Compare against codebase. Flag mismatches.
-
-For each issue found: describe concretely with file/line references, present 2-3 options (including "do nothing"), evaluate effort/risk/impact, recommend one, ask before proceeding.
+For each issue: describe with file/line references, present 2-3 options (including "do nothing"), evaluate effort/risk/impact, recommend one, ask before proceeding.
 
 ## Testing - Red/Green/Refactor TDD
 
-Follow classic TDD universally:
-
 1. **Red** - write test(s) first, confirm they fail before any implementation. A test passing before implementation is broken.
 2. **Green** - implement only enough to pass.
-3. **Refactor** - investigate improvements to both implementation and test code. Only when clear improvement exists; avoid refactor loops.
+3. **Refactor** - only when clear improvement exists; avoid refactor loops.
 
-**Session start**: run existing test suite before making changes. Establishes baseline and catches regressions.
+**Session start**: run existing test suite before making changes.
 
 **Bug fixes**: regression test first (red), then fix (green). Applies to bugs from development, CI, or review feedback alike.
 
 ## Definition of Done
 
-- **Validate before pushing.** Tests pass, typecheck clean, lint clean. Full suite before push. Applies even for "low-risk" changes.
-- **Lint clean means zero warnings in files we touched**, not just zero errors. Fix all warnings before pushing. Lint fixes go in their own discrete commit, not mixed into implementation or test commits.
-- **Non-code changes still require validation.** CI workflows, config - use available tooling (actionlint, yamllint, schema checks) or review against specs.
+- **Validate before pushing.** Tests pass, typecheck clean, lint clean. Full suite before push, even for "low-risk" changes.
+- **Lint clean means zero warnings in files we touched**, not just zero errors. Lint fixes go in their own discrete commit.
+- **Non-code changes still require validation.** Use available tooling (actionlint, yamllint, schema checks) or review against specs.
 - **No untracked shortcuts.** No cut corners without documented tradeoffs and follow-up plan.
 
-## Engineering Preferences
+## Code Style and Engineering
 
 - **DRY** - flag repetition aggressively
 - **Well-tested** - err toward more tests
 - **Appropriately engineered** - avoid both hacky and over-abstracted
 - **Edge cases** - handle more rather than fewer
-- **Explicit over clever**
-- **Readable and maintainable** over terse
-
-## Code Style
-
+- **Explicit over clever; readable over terse**
 - Descriptive, complete-word names; minimize abbreviations
 - Small, single-responsibility functions
-- Comments only when: purpose is non-obvious, deviating from standard approach, documenting a gotcha that can't be eliminated via code/types. Never restate what names already say. Explain **why**, not **what**.
-- Future work comments: `// TODO: description (#issue)`. Always greppable `TODO` prefix - no freeform "see #123".
-- **Markdown tables:** spaces on both sides of every `|` separator. Enforced by markdownlint MD060.
+- Comments explain **why**, not **what**. Only when: purpose is non-obvious, deviating from standard approach, documenting a gotcha that can't be eliminated via code/types.
+- Future work: `// TODO: description (#issue)`. Always greppable `TODO` prefix.
+- **Markdown tables:** spaces on both sides of every `|` separator (markdownlint MD060).
 
 ## Self-Correction Loop
 
 On correction (user or self-caught): propose `CLAUDE.md` update **immediately, before continuing the task**.
 
-- **Trigger**: user correction; or Claude catches a self-correction worth generalizing
+- **Trigger**: user correction; or self-correction worth generalizing
 - **Scope**: substantive mistakes, violated preferences, meaningful tone/style findings
 - **Target**: global `CLAUDE.md` if broadly applicable; most local `CLAUDE.md` otherwise
 - **Process**: (1) stop task (2) propose rule + reasoning (3) apply on confirmation (4) resume
 
 ## Memory Hygiene
 
-- **Index descriptions: specific and filterable** - name feature, issue number, or domain. No vague descriptions.
+- **Index descriptions: specific and filterable** - name feature, issue number, or domain.
 - **Individual files under 1KB.** Over 2KB belongs in a plan, repo doc, or code comment.
 - **Check for existing memory before writing new.** Fewer well-scoped > many granular.
 - **Delete shipped/resolved/obsolete memories.** Remove file and MEMORY.md entry.
 - **Project context -> memory. Global rules -> CLAUDE.md.** Promote feedback memories useful across 2+ sessions.
 
-## Tool Permissions
+## Tool Permissions and Sandbox
 
-- **Read-only: never prompt.** Any command that only reads state (`git diff`, `gh pr view`, `grep`, `ls`, `cat`, version checks, etc.). All contexts.
-- **Local dev toolchain: auto-approve.** Install, test, build, lint, typecheck commands. Treat like Read tool calls - zero friction, zero ceremony. All contexts.
-- **Write/destructive/irreversible: ask first.** `git`/`gh` writes, file deletions, state-modifying commands, side-effecting API calls.
+- **Read-only: never prompt.** `git diff`, `gh pr view`, `grep`, `ls`, `cat`, version checks, etc.
+- **Local dev toolchain: auto-approve.** Install, test, build, lint, typecheck. Zero friction.
+- **Write/destructive/irreversible: ask first.** `git`/`gh` writes, file deletions, side-effecting API calls.
 - Local `CLAUDE.md` may add project-specific permissions or restrictions.
 
-## Sandbox Workaround (interim - remove when #25 is resolved)
+### Sandbox Workaround (interim - remove when #25 is resolved)
 
-Two sandbox restrictions break GitHub operations. Use `dangerouslyDisableSandbox: true` **only** for:
+Use `dangerouslyDisableSandbox: true` **only** for:
 
-- **`gh` CLI commands** (`gh api`, `gh pr`, `gh issue`, `gh run`) - corporate proxy TLS causes `x509: OSStatus -26276`
-- **`git push`, `git fetch`, `git clone`** against `github.com` remotes - sandbox blocks the 1Password SSH agent socket
+- **`gh` CLI commands** - corporate proxy TLS causes `x509: OSStatus -26276`
+- **`git push`, `git fetch`, `git clone`** against `github.com` - sandbox blocks the 1Password SSH agent socket
 
-Don't retry inside the sandbox first; go straight to `dangerouslyDisableSandbox` for the commands above. Both issues tracked in #25.
-
-- Do not use `dangerouslyDisableSandbox` for `curl`, arbitrary HTTP calls, or SSH to non-GitHub hosts. If needed, ask for explicit permission first.
+Go straight to `dangerouslyDisableSandbox` for these; don't retry inside sandbox first. Do not use it for `curl`, arbitrary HTTP calls, or SSH to non-GitHub hosts without explicit permission.
 
 ## External API Calls
 
-- **Probe once, then parallelize.** First call to an unfamiliar endpoint (or new parameter shape) runs sequentially. Only parallelize siblings after that probe succeeds. Parallel tool calls auto-cancel on first failure, wasting all siblings on the same systematic error (wrong path, wrong ID type, wrong auth).
-- **Prefer `gh api --jq '<filter>'` over `gh api ... | jq '<filter>'`.** The `--jq` flag applies only on success; API errors print raw to stderr, preserving the real failure. External `jq` processes error HTML identically to JSON, producing parse errors that mask the underlying issue. For first probes, omit jq entirely to see the raw response.
-- **GraphQL node IDs ≠ REST numeric IDs.** Base64 node IDs (e.g. `PRRC_kwDO...`) returned by GraphQL are not interchangeable with numeric IDs required by REST endpoints. Translate deliberately, or stay in one API surface for the full read-mutate cycle.
+- **Probe once, then parallelize.** First call to an unfamiliar endpoint runs sequentially. Parallel tool calls auto-cancel on first failure, wasting siblings on the same error.
+- **Prefer `gh api --jq` over piping to `jq`.** `--jq` applies only on success; piped `jq` masks API errors. For first probes, omit jq entirely.
+- **GraphQL node IDs ≠ REST numeric IDs.** Don't interchange them. Stay in one API surface for read-mutate cycles.
 
 ## Git Conventions
 
 - [Conventional Commits](https://www.conventionalcommits.org/): `type(scope): description`. Scope optional but preferred.
 - **Subject: 72 chars max.** Priority: (1) clear (2) conventional format (3) length. Body also 72-char wrapped.
-- **No `Co-Authored-By` trailers.** No "Generated with Claude Code" attribution. Applies everywhere: commits, PR descriptions, issue bodies, comments.
+- **No `Co-Authored-By` trailers.** No "Generated with Claude Code" attribution. Anywhere.
 - **Discrete commits per PR.** Map to logical units: config/types, tests, implementation, lint autofix.
 - **Lint autofix: always its own commit.**
 - **Never commit to default branch.** Always feature branch. Ask to confirm if on default branch.
 - **Start from fresh main.** Fetch, update, branch before new work.
 - **Never amend with open PR.** Creates force-push, loses review context. Always new commit.
-- **Amending unpushed commits is always fine.** No confirmation needed when the commit hasn't been pushed.
-- **Sync open PRs via merge, not rebase.** `git merge origin/main` preserves review timeline. Only rebase if the PR is draft/unshared or explicitly requested.
+- **Amending unpushed commits is always fine.** No confirmation needed.
+- **Sync open PRs via merge, not rebase.** `git merge origin/main` preserves review timeline. Only rebase if draft/unshared or explicitly requested.
 
-## CI Watch
+## Post-Push: CI Watch and Bot Review Triage
 
-After pushing to any PR (including drafts), proactively monitor CI:
+After pushing to any PR (including drafts), run both concurrently:
 
-- **Poll** with `gh pr checks`. Don't wait for user to report failures.
-- **On failure**: read logs (`gh run view --log-failed`), diagnose, fix, commit, push, resume watching.
-- **On success**: briefly confirm green.
+**CI Watch:**
+- Poll with `gh pr checks`. On failure: read logs (`gh run view --log-failed`), diagnose, fix, commit, push, resume watching. On success: briefly confirm green.
 - **CI is authoritative** - local validation is necessary but not sufficient.
-- **Run CI watch and bot review triage concurrently** after each push.
 
-## Bot PR Review Triage
-
-After pushing a new PR, watch for bot review comments (Copilot, Codex, etc.).
-
-**Evaluate automatically:** read all comments, verify each claim, categorize (accept/reject/nuance), present concise recommendation per comment.
-
-**Act only with explicit authorization:** batch trivial fixes into one commit, reply per review feedback conventions below. Flag non-trivial scope separately.
+**Bot Review Triage** (Copilot, Codex, etc.):
+- Evaluate automatically: read all comments, verify each claim, categorize (accept/reject/nuance), present concise recommendation per comment.
+- Act only with explicit authorization. Batch trivial fixes into one commit. Flag non-trivial scope separately.
 
 ## PR Review Conventions
 
@@ -173,30 +153,26 @@ After pushing a new PR, watch for bot review comments (Copilot, Codex, etc.).
 - Accepted: reply `:zap: <commit hash>`, minimal commentary.
 - Rejected: reply `:thought_balloon: <brief rationale>`.
 - Batch trivial fixes; non-trivial gets its own commit.
-- **Only resolve threads we authored.** Reviewer threads (human and bot) stay open after we reply so human reviewers can see what was flagged, how it was addressed, and weigh in if needed.
-- For our own threads: resolve after the reply is published. If replies are staged as pending review drafts, wait until the review is submitted before resolving.
+- **Only resolve threads we authored.** Reviewer threads stay open so reviewers can see what was flagged and weigh in. For our threads: resolve after reply is published (if staged as pending, wait until review is submitted).
 - Use `resolveReviewThread` GraphQL mutation; never `minimizeComment`.
 
 **Posting reviews on my behalf:**
 - Never post comments individually. Use pending review mechanism.
-- Present batch for confirmation; I submit manually to control review event type.
+- Present batch for confirmation; I submit manually.
 
 ## Author Review Guidance
 
-When asked, post review-guidance comments on our own PRs to help peer reviewers navigate the changes. Everything ships as a **single review submission** with the walkthrough as the review body and inline comments threaded below it.
+When asked, post review-guidance comments on our own PRs as a **single review submission**: walkthrough as review body, inline comments threaded below.
 
-**Walkthrough** (the review body):
+**Walkthrough** (review body):
 - One-paragraph summary of what changed and why.
-- Ordered list of files/areas to review, in suggested reading order. Each entry: file path, one sentence on what changed there, and why that order helps comprehension.
-- Call out anything the reviewer should *not* spend time on (e.g., mechanical renames, generated code).
+- Ordered file list in suggested reading order: file path, what changed, why that order.
+- Call out what reviewers should skip (mechanical renames, generated code).
 
-**Inline comments** (threaded under the walkthrough, on specific diff lines):
-- Prefix every inline comment with :notebook: so reviewers can visually distinguish author guidance from review feedback.
-- **When to add:** dense logic (regex, merge semantics), intentional tradeoffs (tech debt, relaxed assertions), subtle constraints, anything where "why did they do it this way?" is a predictable question.
-- **When not to:** obvious changes, trivial additions, anything the PR description or walkthrough already covers.
-- Flag risk: "this is the tricky part", "correctness depends on X invariant".
-- Keep each comment to one or two sentences. Link to PRD/issue if the context lives there. If it needs more, the code needs a real comment instead.
+**Inline comments** (on specific diff lines):
+- Prefix with :notebook: to distinguish from review feedback.
+- Add for: dense logic, intentional tradeoffs, subtle constraints, anything where "why this way?" is predictable.
+- Skip for: obvious changes, anything the walkthrough already covers.
+- Flag risk. Keep to 1-2 sentences. If it needs more, the code needs a real comment.
 
-**Mechanics:**
-- Stage via pr-review-batching skill; same posting conventions as any other review (pending mechanism, present for confirmation).
-- Don't duplicate information already in the PR description or commit messages; reference them instead.
+**Mechanics:** Stage via pr-review-batching skill. Don't duplicate PR description or commit messages; reference them.
