@@ -74,6 +74,7 @@ Follow classic TDD universally:
 ## Definition of Done
 
 - **Validate before pushing.** Tests pass, typecheck clean, lint clean. Full suite before push. Applies even for "low-risk" changes.
+- **Lint clean means zero warnings in files we touched**, not just zero errors. Fix all warnings before pushing. Lint fixes go in their own discrete commit, not mixed into implementation or test commits.
 - **Non-code changes still require validation.** CI workflows, config - use available tooling (actionlint, yamllint, schema checks) or review against specs.
 - **No untracked shortcuts.** No cut corners without documented tradeoffs and follow-up plan.
 
