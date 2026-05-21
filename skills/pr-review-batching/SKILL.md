@@ -309,6 +309,47 @@ wait for acknowledgement, since the action was already approved.
 
 ---
 
+## Operation 3: reply to existing review threads
+
+Use this flow when replying to comments left by reviewers (human or bot) on a PR.
+
+### Why this is different
+
+Reply-to-thread comments **cannot be staged as pending drafts.** The GitHub REST API endpoint
+for threaded replies (`POST /repos/{owner}/{repo}/pulls/{pull_number}/comments/{comment_id}/replies`)
+publishes immediately. The `POST /pulls/{n}/reviews` pending-review endpoint does not support
+`in_reply_to` on its `comments[]` array (returns 422).
+
+This means **the usual "stage as pending, user submits" flow does not apply here.** Threaded
+replies are always published the moment the API call is made.
+
+### Required flow
+
+Because replies publish immediately, the user must approve each batch before any API call:
+
+1. **Draft the replies.** For each thread to reply to, prepare:
+   - The comment ID being replied to
+   - The reply body text
+   - Classification: `:zap: <commit hash>` (accepted) or `:thought_balloon: <rationale>`
+     (rejected/context)
+
+2. **Present the full batch to the user.** Show each reply with the original comment it
+   responds to, the proposed reply text, and ask for explicit confirmation to post.
+
+3. **Post only after confirmation.** Use the threaded reply endpoint:
+
+   ```bash
+   gh api repos/{owner}/{repo}/pulls/{pull_number}/comments/{comment_id}/replies \
+     --method POST \
+     -f body='<reply text>'
+   ```
+
+4. **Never fall back to direct publish when a draft path fails.** If the pending review
+   endpoint rejects `in_reply_to`, that is expected. Present the text for manual posting or
+   seek explicit confirmation, do not silently switch to an immediate-publish endpoint.
+
+---
+
 ## Interaction with `pr-review`
 
 `skills/pr-review/SKILL.md` Step 9 ends with: "Want me to draft these as pending-review
