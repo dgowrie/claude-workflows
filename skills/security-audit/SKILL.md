@@ -15,10 +15,7 @@ description: >
 
 # Security Audit
 
-You are conducting a systematic source-code-level security audit. Your job is to find
-vulnerabilities that automated dependency scanners (Trivy, Grype, Dependabot, Renovate, OSV
-Scanner) cannot detect. Focus on code-level issues reachable by users or triggered via crafted
-input.
+Find source-code vulnerabilities that automated dependency scanners cannot detect.
 
 ---
 
@@ -34,8 +31,6 @@ Before anything else, understand the project:
 4. **Check existing security tooling**: CI workflows, dependency scanners, audit scripts, Renovate
    config. Understand what's already covered.
 5. **Present the deployment context and scope to the user** for confirmation before proceeding.
-
-This orientation shapes everything: threat model, batch strategy, and what counts as exploitable.
 
 ---
 
@@ -64,12 +59,6 @@ Group source files into **8-12 functional batches** by area of concern, not one 
 Batch boundaries should follow data flow (e.g., API layer, hooks/state, UI components that render
 user data, utility functions). Aim for ~500-1500 lines per batch.
 
-For each batch, spawn a subagent with:
-- The specific files to audit
-- The deployment context from Phase 0
-- The vulnerability checklist (adapted to the stack - see below)
-- The finding report format
-
 ### Vulnerability checklist (adapt per stack)
 
 **Frontend (React/TypeScript/JavaScript)**:
@@ -96,7 +85,7 @@ For each batch, spawn a subagent with:
 
 ### Subagent prompt template
 
-Each subagent gets this structure (fill in the blanks per batch):
+Spawn a subagent per batch with this structure:
 
 ```
 You are conducting a security audit of a {project_type} ({stack}).
@@ -170,14 +159,8 @@ sub-issue** of the tracking issue using GitHub's sub-issue API:
    }'
    ```
 
-The phase comments should still reference sub-issues in tables and lists as defined above, but
-the native sub-issue relationship is **required in addition** - do not rely on comment references
-alone. The parent issue's sub-issue summary must reflect all findings.
-
-Each sub-issue body should include: summary, severity, reachability, root cause, impact, fix options.
-
-Append Phase C results to the tracking issue: verification table, false-positive rationale, and
-overall assessment.
+Append Phase C results to the tracking issue: verification table (referencing sub-issues),
+false-positive rationale, and final assessment.
 
 ---
 
@@ -187,23 +170,19 @@ The tracking issue should have this structure when complete:
 
 1. **Issue body**: scope, deployment context, Phase A dependency results
 2. **Comment 1**: Phase B source audit results (clean batches, findings table, assessment)
-3. **Comment 2**: Phase C verification (verified sub-issues table, false positives, final assessment)
+3. **Comment 2**: Phase C verification (verified findings table with sub-issue links, false
+   positives, final assessment)
 4. **Sub-issues**: one per verified finding, linked via GitHub's native sub-issue relationship
-   (not markdown checklists or comment references)
+
+Phase comments reference sub-issues in their tables, but the native relationship is **required
+in addition** - do not rely on comment references alone.
 
 ---
 
 ## Cost estimation
 
-Before starting Phase B, estimate token cost based on:
-- Number of source files and total lines
-- Number of planned batches
-- Model (Opus ~$15/1M input tokens, Sonnet ~$3/1M)
-
-Present the estimate to the user. Typical ranges:
-- Small repo (<10K lines): $10-25 on Opus
-- Medium repo (10-50K lines): $25-75 on Opus
-- Large repo (50K+ lines): consider Sonnet for batch agents with Opus for verification
+Before starting Phase B, estimate token cost based on source file count, total lines, planned
+batch count, and model pricing. Present the estimate to the user before proceeding.
 
 ---
 
