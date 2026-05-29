@@ -170,8 +170,9 @@ sub-issue** of the tracking issue using GitHub's sub-issue API:
    }'
    ```
 
-**Do not substitute comments or markdown checklists for the native sub-issue relationship.** The
-parent issue's sub-issue summary must reflect all findings.
+The phase comments should still reference sub-issues in tables and lists as defined above, but
+the native sub-issue relationship is **required in addition** - do not rely on comment references
+alone. The parent issue's sub-issue summary must reflect all findings.
 
 Each sub-issue body should include: summary, severity, reachability, root cause, impact, fix options.
 
