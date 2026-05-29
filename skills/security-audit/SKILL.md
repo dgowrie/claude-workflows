@@ -155,10 +155,25 @@ Review all Phase B findings against the actual source code:
 
 ### Create sub-issues
 
-For each verified finding (not false-positive), create a GitHub sub-issue linked to the parent:
-- Title: `{ID}: {one-line summary}`
-- Body: summary, severity, reachability, root cause, impact, fix options
-- Label: `security`
+For each verified finding (not false-positive), create a GitHub issue and link it as a **native
+sub-issue** of the tracking issue using GitHub's sub-issue API:
+
+1. Create the issue: `gh issue create --title "{ID}: {one-line summary}" --label security --body "..."`
+2. Get the node IDs for both the new issue and the parent tracking issue
+3. Link as sub-issue via GraphQL:
+   ```
+   gh api graphql -f query='mutation {
+     addSubIssue(input: {issueId: "<PARENT_NODE_ID>", subIssueId: "<CHILD_NODE_ID>"}) {
+       issue { id }
+       subIssue { id }
+     }
+   }'
+   ```
+
+**Do not substitute comments or markdown checklists for the native sub-issue relationship.** The
+parent issue's sub-issue summary must reflect all findings.
+
+Each sub-issue body should include: summary, severity, reachability, root cause, impact, fix options.
 
 Append Phase C results to the tracking issue: verification table, false-positive rationale, and
 overall assessment.
@@ -172,7 +187,8 @@ The tracking issue should have this structure when complete:
 1. **Issue body**: scope, deployment context, Phase A dependency results
 2. **Comment 1**: Phase B source audit results (clean batches, findings table, assessment)
 3. **Comment 2**: Phase C verification (verified sub-issues table, false positives, final assessment)
-4. **Sub-issues**: one per verified finding, linked to parent
+4. **Sub-issues**: one per verified finding, linked via GitHub's native sub-issue relationship
+   (not markdown checklists or comment references)
 
 ---
 
