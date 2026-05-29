@@ -41,7 +41,8 @@ This orientation shapes everything: threat model, batch strategy, and what count
 
 ## Phase A: Dependency Scan (quick win)
 
-Run the package manager's audit command (`yarn npm audit`, `npm audit`, `go vuln check`, etc.):
+Run the appropriate audit command for the detected package manager (e.g., `npm audit`,
+`yarn audit` for Yarn Classic v1, `yarn npm audit` for Yarn Berry v2+, `go vuln check`, etc.):
 
 - Filter results by severity
 - Cross-reference with existing resolutions/pins
