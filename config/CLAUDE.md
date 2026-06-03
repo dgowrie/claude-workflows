@@ -83,23 +83,6 @@ For each issue: describe with file/line references, present 2-3 options (includi
 - Future work: `// TODO: description (#issue)`. Always greppable `TODO` prefix.
 - **Markdown tables:** spaces on both sides of every `|` separator (markdownlint MD060).
 
-## Self-Correction Loop
-
-On correction (user or self-caught): propose `CLAUDE.md` update **immediately, before continuing the task**.
-
-- **Trigger**: user correction; or self-correction worth generalizing
-- **Scope**: substantive mistakes, violated preferences, meaningful tone/style findings
-- **Target**: global `CLAUDE.md` if broadly applicable; most local `CLAUDE.md` otherwise
-- **Process**: (1) stop task (2) propose rule + reasoning (3) apply on confirmation (4) resume
-
-## Memory Hygiene
-
-- **Index descriptions: specific and filterable** - name feature, issue number, or domain.
-- **Individual files under 1KB.** Over 2KB belongs in a plan, repo doc, or code comment.
-- **Check for existing memory before writing new.** Fewer well-scoped > many granular.
-- **Delete shipped/resolved/obsolete memories.** Remove file and MEMORY.md entry.
-- **Project context -> memory. Global rules -> CLAUDE.md.** Promote feedback memories useful across 2+ sessions.
-
 ## Tool Permissions and Sandbox
 
 - **Read-only: never prompt.** `git diff`, `gh pr view`, `grep`, `ls`, `cat`, version checks, etc.

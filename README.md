@@ -7,6 +7,7 @@ Claude Code's built-in persistence (memory, plans) is useful but fragile: memori
 ## Structure
 
 ```
+config/        Global CLAUDE.md and rules, symlinked into ~/.claude/
 internals/     How Claude Code works under the hood
 workflows/     Patterns and practices for effective use
 explorations/  Session notes and behavioral findings
@@ -51,6 +52,18 @@ Changes to a skill file in the repo are immediately live — no copy or sync ste
 - [`/tdd`](skills/tdd/SKILL.md) — test-driven development with red-green-refactor loop and reference guides
 - [`/review-thorough`](skills/review-thorough/SKILL.md) — wraps built-in `/review` and additionally evaluates bot reviews including resolved threads
 - [`/security-audit`](skills/security-audit/SKILL.md) — three-phase source-code vulnerability scan (dep audit, parallelized source review, verification + false-positive triage) with GitHub issue tracking
+
+### Rules
+
+Rules in `config/rules/` are symlinked into `~/.claude/rules/`, making them globally active across all projects. Like skills, edits in the repo are immediately live.
+
+```
+~/.claude/rules/memory-session-exit.md -> ~/dev/claude-workflows/config/rules/memory-session-exit.md
+```
+
+- [Memory Session Exit](config/rules/memory-session-exit.md) — audit and update project memories before ending any substantive session
+- [Memory Hygiene](config/rules/memory-hygiene.md) — guidelines for memory file size, deduplication, and lifecycle
+- [Self-Correction Loop](config/rules/self-correction-loop.md) — on correction, propose a CLAUDE.md or rule update before continuing
 
 ## Improvements to consider
 

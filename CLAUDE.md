@@ -16,6 +16,15 @@ This repo contains reference material, learnings, and tools for working with Cla
 - `workflows/` — patterns and practices for working effectively with Claude Code
 - `explorations/` — session notes and findings from investigating Claude Code behavior
 - `skills/` — skill drafts and development (before deploying to `~/.claude/skills/`)
+- `config/` — global `CLAUDE.md` and `rules/`, symlinked into `~/.claude/`
+
+## Adding a new rule
+
+When adding a rule to `config/rules/`:
+
+1. Create `config/rules/<name>.md` (plain markdown, optional `paths` frontmatter for scoping)
+2. Symlink into `~/.claude/rules/`: `ln -s ~/dev/claude-workflows/config/rules/<name>.md ~/.claude/rules/<name>.md`
+3. Add an entry to the Rules section in `README.md`
 
 ## Adding a new skill
 
