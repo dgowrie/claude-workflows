@@ -12,7 +12,7 @@ When stating something non-trivial, label the basis:
 
 Don't mix these silently. "This function returns a string" means different things depending on whether you read the signature or guessed from usage.
 
-## Pre-commit self-challenge
+## Pre-conclusion self-challenge
 
 Before finalizing a non-trivial recommendation, diagnosis, or plan:
 
@@ -30,6 +30,7 @@ For high-stakes conclusions (architecture decisions, security assessments, root 
 - **Subagent prompt should include:** the specific claim to attack, the evidence it rests on, and an instruction to default to "not proven" if uncertain
 - **Reconcile before presenting.** If the adversarial subagent finds a real gap, address it (verify, revise, or flag as open risk). Don't just append "but a subagent disagreed" as a disclaimer.
 - **Don't overuse.** This is for judgment calls with real consequences, not routine code changes.
+- **Example threshold:** "I believe this race condition is safe because X" (trigger - cost of being wrong is a production bug) vs "I recommend extracting this into a helper" (skip - cost of being wrong is a follow-up refactor).
 
 ## External system claims
 
