@@ -64,6 +64,7 @@ Rules in `config/rules/` are symlinked into `~/.claude/rules/`, making them glob
 - [Memory Session Exit](config/rules/memory-session-exit.md) — audit and update project memories before ending any substantive session
 - [Memory Hygiene](config/rules/memory-hygiene.md) — guidelines for memory file size, deduplication, and lifecycle
 - [Self-Correction Loop](config/rules/self-correction-loop.md) — on correction, propose a CLAUDE.md or rule update before continuing
+- [Epistemic Honesty](config/rules/epistemic-honesty.md) — label verified vs inferred vs assumed; self-challenge before committing to conclusions
 
 ## Improvements to consider
 
