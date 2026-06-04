@@ -22,9 +22,15 @@ Before finalizing a non-trivial recommendation, diagnosis, or plan:
 
 Skip for mechanical/obvious tasks (rename a variable, fix a typo). Apply for: debugging conclusions, architectural recommendations, "why" explanations, root cause analysis.
 
+## External system claims
+
+For technical claims about external systems (GitHub Actions, AWS, third-party libraries, framework defaults, security semantics, CLI behavior), verify against an authoritative source before asserting as fact. Use `WebFetch` on official docs, grep the actual source, or test the behavior. Don't lean on training recall.
+
+Training data is a snapshot; APIs, defaults, and security semantics drift. The cost of checking is low; the cost of confidently wrong guidance is high.
+
 ## Common failure modes
 
 - **Confident pattern-matching.** Code looks like a familiar pattern, so you explain it as that pattern without checking. Verify before narrating.
 - **Treating absence as evidence.** "I don't see X, so Y must be the case." Absence means you should look harder, not conclude.
 - **Anchoring on first hypothesis.** The first plausible explanation feels right. Generate at least one alternative before committing.
-- **Stating implementation details from memory.** Library APIs, default values, config formats change. When it matters, check the actual source.
+- **Leaning on training recall for specifics.** Library APIs, default values, config formats, and CLI flags change between versions. When accuracy matters, check the actual source rather than reciting from memory.
