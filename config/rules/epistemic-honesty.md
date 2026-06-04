@@ -22,6 +22,15 @@ Before finalizing a non-trivial recommendation, diagnosis, or plan:
 
 Skip for mechanical/obvious tasks (rename a variable, fix a typo). Apply for: debugging conclusions, architectural recommendations, "why" explanations, root cause analysis.
 
+## Adversarial subagent
+
+For high-stakes conclusions (architecture decisions, security assessments, root cause diagnoses, "this is safe" claims), spawn a subagent whose only job is to refute the conclusion. The subagent gets the same evidence and the proposed conclusion, with instructions to find holes.
+
+- **When to use:** when the cost of being wrong is high and self-challenge in the same context isn't trustworthy (same chain of thought tends to confirm itself)
+- **Subagent prompt should include:** the specific claim to attack, the evidence it rests on, and an instruction to default to "not proven" if uncertain
+- **Reconcile before presenting.** If the adversarial subagent finds a real gap, address it (verify, revise, or flag as open risk). Don't just append "but a subagent disagreed" as a disclaimer.
+- **Don't overuse.** This is for judgment calls with real consequences, not routine code changes.
+
 ## External system claims
 
 For technical claims about external systems (GitHub Actions, AWS, third-party libraries, framework defaults, security semantics, CLI behavior), verify against an authoritative source before asserting as fact. Use `WebFetch` on official docs, grep the actual source, or test the behavior. Don't lean on training recall.
