@@ -36,7 +36,7 @@ For high-stakes conclusions (architecture decisions, security assessments, root 
 
 For technical claims about external systems (GitHub Actions, AWS, third-party libraries, framework defaults, security semantics, CLI behavior), verify against an authoritative source before asserting as fact. Use `WebFetch` on official docs, grep the actual source, or test the behavior. Don't lean on training recall.
 
-Training data is a snapshot; APIs, defaults, and security semantics drift. The cost of checking is low; the cost of confidently wrong guidance is high.
+Training data is a snapshot; APIs, defaults, and security semantics drift. The cost of checking is low; the cost of confidently wrong guidance is high. See the Verified label above for intra-session staleness.
 
 ## Common failure modes
 
