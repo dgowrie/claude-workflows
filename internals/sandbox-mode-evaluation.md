@@ -13,7 +13,8 @@ Use `/sandbox` once, then inspect settings at both scopes:
 - `~/.claude/settings.json` (global defaults)
 - `<repo>/.claude/settings.json` (project overrides, when present)
 
-This doc intentionally avoids pinning an unverified `sandbox.enabled`/`sandbox.mode` schema example because key names and structure can vary across Claude Code versions.
+This doc intentionally avoids pinning an unverified `sandbox.enabled`/`sandbox.mode` schema example.
+Key names and structure can vary across Claude Code versions.
 
 ### Via `/sandbox` command (interactive, ad-hoc)
 
@@ -33,7 +34,7 @@ Opens a menu to choose between auto-allow and regular permissions. Can toggle mi
 
 - Writes confined to CWD and subdirectories by default
 - Reads allowed broadly
-- Extra write capability is typically granted through permission allowlist patterns (for example, `permissions.allow` entries), not a documented `sandbox.filesystem.*` key family
+- Extra write capability is typically granted through permission allowlist patterns (for example, `permissions.allow` entries) rather than `sandbox.filesystem.*` configuration keys
 
 ### Network
 
