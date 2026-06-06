@@ -6,18 +6,11 @@ How sandbox mode works, what it restricts, and when to use it vs. Docker isolati
 
 ## Enabling Sandbox Mode
 
-### Via settings.json (persistent, silent)
+### Via settings.json (persistent, schema can change)
 
-```json
-{
-  "sandbox": {
-    "enabled": true,
-    "mode": "auto-allow"
-  }
-}
-```
+Use `/sandbox` once, then inspect `~/.claude/settings.json` (or project `.claude/settings.json`) to see the exact keys your installed Claude Code version writes.
 
-No per-session prompts. Every session starts sandboxed automatically.
+This doc intentionally avoids pinning an unverified `sandbox.enabled`/`sandbox.mode` schema example.
 
 ### Via `/sandbox` command (interactive, ad-hoc)
 
@@ -37,12 +30,12 @@ Opens a menu to choose between auto-allow and regular permissions. Can toggle mi
 
 - Writes confined to CWD and subdirectories by default
 - Reads allowed broadly
-- Customizable via `sandbox.filesystem.allowWrite`
+- Extra write capability is typically granted through permission allowlist patterns (for example, `permissions.allow` entries), not a documented `sandbox.filesystem.*` key family
 
 ### Network
 
-- Proxy-based domain filtering; only approved domains reachable
-- New domains trigger prompts (or auto-block with `allowManagedDomainsOnly`)
+- Only approved domains are reachable by default
+- New domains trigger prompts (or deny in stricter permission modes)
 - Domain-level only, no TLS inspection
 
 ### Protected paths (never auto-approved)
