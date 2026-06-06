@@ -8,9 +8,12 @@ How sandbox mode works, what it restricts, and when to use it vs. Docker isolati
 
 ### Via settings.json (persistent, schema can change)
 
-Use `/sandbox` once, then inspect `~/.claude/settings.json` (or project `.claude/settings.json`) to see the exact keys your installed Claude Code version writes.
+Use `/sandbox` once, then inspect settings at both scopes:
 
-This doc intentionally avoids pinning an unverified `sandbox.enabled`/`sandbox.mode` schema example.
+- `~/.claude/settings.json` (global defaults)
+- `<repo>/.claude/settings.json` (project overrides, when present)
+
+This doc intentionally avoids pinning an unverified `sandbox.enabled`/`sandbox.mode` schema example because key names and structure can vary across Claude Code versions.
 
 ### Via `/sandbox` command (interactive, ad-hoc)
 
