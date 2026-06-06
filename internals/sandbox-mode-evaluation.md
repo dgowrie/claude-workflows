@@ -42,9 +42,11 @@ Opens a menu to choose between auto-allow and regular permissions. Can toggle mi
 - New domains trigger prompts (or deny in stricter permission modes)
 - Domain-level only, no TLS inspection
 
-### Protected paths (never auto-approved)
+### Protected paths (different protection semantics)
 
-`.git`, `.claude`, `.vscode`, `.idea`, `.husky`, `~/.gitconfig`, `~/.bashrc`, `~/.zshrc`, `~/.ssh`, system directories (`/bin`, `/usr`)
+- **Repo metadata/config paths (never auto-approved):** `.git`, `.claude`, `.vscode`, `.idea`, `.husky`
+- **User-home config/credential paths (high-friction; typically prompt/deny):** `~/.gitconfig`, `~/.bashrc`, `~/.zshrc`, `~/.ssh`
+- **System paths (outside normal write scope; prompt/deny):** `/bin`, `/usr`
 
 ### Enforcement
 
