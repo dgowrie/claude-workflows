@@ -78,7 +78,7 @@ OS-level (Seatbelt on macOS, bubblewrap on Linux). All child processes inherit r
 | Modifies files outside repo | Blocked | Sandbox boundary |
 | Pushes to remote | Prompts | Not auto-allowed |
 | Creates/closes PRs or issues | Prompts | Not auto-allowed |
-| Exfiltrates code | Blocked | Network proxy |
+| Exfiltrates code | Mitigated | Unapproved domains are blocked, but approved domains can still be exfiltration paths |
 | Modifies git/shell config | Blocked | Protected path |
 | Malicious subprocess escapes | Blocked | OS-enforced |
 
