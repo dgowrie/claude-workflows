@@ -21,6 +21,7 @@ skills/        Skill drafts before deploying to ~/.claude/skills/
 - [Claude Code Internals — Cheat Sheet](internals/claude-code-internals-cheatsheet.md)
 - [Claude Code Internals — Presentation](internals/claude-code-internals-presentation.html) (Reveal.js, open in browser)
 - [Memory & Context Management](internals/memory-context-management.md) — how memory impacts token usage, two-tier loading, scaling guidelines
+- [Sandbox Mode Evaluation](internals/sandbox-mode-evaluation.md) — sandbox restrictions, auto-allow boundaries, risk assessment, native sandbox vs Docker
 
 ### Workflows
 

@@ -33,7 +33,7 @@ Opens a menu to choose between auto-allow and regular permissions. Can toggle mi
 ### Filesystem
 
 - Writes confined to CWD and subdirectories by default
-- Reads allowed broadly
+- Reads are unrestricted by default
 - Extra write capability is typically granted through permission allowlist patterns (for example, `permissions.allow` entries) rather than `sandbox.filesystem.*` configuration keys
 
 ### Network
@@ -78,7 +78,7 @@ OS-level (Seatbelt on macOS, bubblewrap on Linux). All child processes inherit r
 | Modifies files outside repo | Blocked | Sandbox boundary |
 | Pushes to remote | Prompts | Not auto-allowed |
 | Creates/closes PRs or issues | Prompts | Not auto-allowed |
-| Exfiltrates code | Mitigated | Unapproved domains are blocked, but approved domains can still be exfiltration paths |
+| Exfiltrates code | Mitigated | Unapproved domains are blocked, but approved domains and tool-use side channels (e.g., data in API call bodies) are not filtered |
 | Modifies git/shell config | Blocked | Protected path |
 | Malicious subprocess escapes | Blocked | OS-enforced |
 
@@ -94,7 +94,7 @@ OS-level (Seatbelt on macOS, bubblewrap on Linux). All child processes inherit r
 | Network | Domain-level filtering | Complete isolation unless ports exposed |
 | Dev workflow | IDE, shell, tools seamless | Must enter container; separate tooling |
 | Isolation strength | OS sandbox primitives | Full kernel-level isolation (stronger) |
-| Escape difficulty | `dangerouslyDisableSandbox` flag (prompts user) | Harder (unless `--privileged`) |
+| Escape difficulty | `dangerouslyDisableSandbox` flag (prompts user in interactive sessions; headless behavior depends on permission mode) | Harder (unless `--privileged`) |
 
 ### When native sandbox fits
 
