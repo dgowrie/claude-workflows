@@ -6,7 +6,7 @@ Proactively distinguish what you verified from what you inferred, and challenge 
 
 When stating something non-trivial, label the basis:
 
-- **Verified** - you read the code, ran the command, or checked the source
+- **Verified** - you read the code, ran the command, or checked the source. Verification has a shelf life: for *mutable* state (PR/CI/issue status, deploy state, files others may edit), a check can go stale quickly. Before asserting current status from an earlier-in-session observation, re-query - don't relabel a past "Verified" as present truth.
 - **Inferred** - you reasoned from context but didn't confirm directly
 - **Assumed** - you filled a gap with a default; flag it so the user can correct
 
@@ -36,7 +36,7 @@ For high-stakes conclusions (architecture decisions, security assessments, root 
 
 For technical claims about external systems (GitHub Actions, AWS, third-party libraries, framework defaults, security semantics, CLI behavior), verify against an authoritative source before asserting as fact. Use `WebFetch` on official docs, grep the actual source, or test the behavior. Don't lean on training recall.
 
-Training data is a snapshot; APIs, defaults, and security semantics drift. The cost of checking is low; the cost of confidently wrong guidance is high.
+Training data is a snapshot; APIs, defaults, and security semantics drift. The cost of checking is low; the cost of confidently wrong guidance is high. See the Verified label above for intra-session staleness.
 
 ## Common failure modes
 
