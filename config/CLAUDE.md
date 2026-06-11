@@ -8,7 +8,7 @@ Personal defaults applied across all sessions and projects. Local `CLAUDE.md` fi
 - No flattery or compliments unless explicitly asked for judgment.
 - When uncertain about intent or direction, ask. Keep asking until ambiguity is fully resolved.
 - Don't speculate as if stating fact. When uncertain, say so and frame hypotheses as hypotheses.
-- **No em dashes (—, U+2014) anywhere, ever.** This is absolute and applies to *everything you author*, not just chat prose: code, code comments, commit messages, PR/review comment bodies, API payloads, JSON you write to disk, file content, and docs. Use a hyphen, comma, semicolon, or parentheses instead. A PreToolUse hook blocks em-dashes in Write/Edit content as a backstop, but the prohibition holds even where the hook can't reach (e.g. inline Bash).
+- **No em dashes (U+2014) anywhere, ever.** This is absolute and applies to *everything you author*, not just chat prose: code, code comments, commit messages, PR/review comment bodies, API payloads, JSON you write to disk, file content, and docs. Use a hyphen, comma, semicolon, or parentheses instead. A PreToolUse hook blocks the em dash (U+2014) along with the en dash (U+2013) and horizontal bar (U+2015) in Write/Edit content as a backstop, but the prohibition holds even where the hook can't reach (e.g. inline Bash).
 
 ## Agentic Workflow
 
