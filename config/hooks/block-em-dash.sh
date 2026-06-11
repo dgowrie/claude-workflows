@@ -4,6 +4,14 @@
 # Exit 2 = block the tool call and feed stderr back to Claude.
 set -euo pipefail
 
+# Hard dependency: without jq we cannot read the tool input. Under `set -e` a
+# missing jq would abort with a generic "command not found" and an ambiguous
+# exit code; block explicitly with an actionable reason instead.
+if ! command -v jq >/dev/null 2>&1; then
+  echo "Blocked: block-em-dash hook requires 'jq', which was not found on PATH. Install jq, then retry." >&2
+  exit 2
+fi
+
 input=$(cat)
 
 # Pull the author-supplied text out of whichever tool fired:
