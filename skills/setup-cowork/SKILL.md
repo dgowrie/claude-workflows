@@ -1,5 +1,5 @@
 ---
-name: setup-cowork
+name: "setup-cowork"
 description: "Guided Cowork setup — install role-matched plugins, connect your tools, try a skill."
 ---
 
