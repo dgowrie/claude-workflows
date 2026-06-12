@@ -33,3 +33,11 @@ When adding a skill to `skills/`:
 1. Create `skills/<name>/SKILL.md` with `user-invocable: true` in frontmatter
 2. Symlink into `~/.claude/skills/`: `ln -s ~/dev/claude-workflows/skills/<name> ~/.claude/skills/<name>`
 3. Add an entry to the Skills section in `README.md`
+
+## Adding a new agent
+
+When adding a subagent definition to `agents/`:
+
+1. Create `agents/<name>.md` (frontmatter with `name`, `description`, `model`; optional `memory: user` for persistent agent memory)
+2. Symlink into `~/.claude/agents/`: `ln -s ~/dev/claude-workflows/agents/<name>.md ~/.claude/agents/<name>.md`
+3. Add an entry to the Agents section in `README.md`

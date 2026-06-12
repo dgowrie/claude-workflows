@@ -12,6 +12,7 @@ internals/     How Claude Code works under the hood
 workflows/     Patterns and practices for effective use
 explorations/  Session notes and behavioral findings
 skills/        Skill drafts before deploying to ~/.claude/skills/
+agents/        Subagent definitions, symlinked into ~/.claude/agents/
 ```
 
 ## Contents
@@ -66,6 +67,16 @@ Rules in `config/rules/` are symlinked into `~/.claude/rules/`, making them glob
 - [Memory Hygiene](config/rules/memory-hygiene.md) — guidelines for memory file size, deduplication, and lifecycle
 - [Self-Correction Loop](config/rules/self-correction-loop.md) — on correction, propose a CLAUDE.md or rule update before continuing
 - [Epistemic Honesty](config/rules/epistemic-honesty.md) — label verified vs inferred vs assumed; self-challenge before committing to conclusions
+
+### Agents
+
+Subagent definitions in `agents/` are symlinked into `~/.claude/agents/`, making them available to the Agent tool across all projects. Like skills and rules, edits in the repo are immediately live.
+
+```
+~/.claude/agents/pr-code-reviewer.md -> ~/dev/claude-workflows/agents/pr-code-reviewer.md
+```
+
+- [`pr-code-reviewer`](agents/pr-code-reviewer.md) - reviews diffs and PRs against the global CLAUDE.md guidelines, the `/pr-review` skill, and the rules; applies epistemic-honesty labeling, stages feedback via pending review, and triages bot comments. Has persistent user-scoped memory.
 
 ## Improvements to consider
 
