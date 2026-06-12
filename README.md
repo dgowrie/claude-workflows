@@ -81,6 +81,7 @@ Rules in `config/rules/` are symlinked into `~/.claude/rules/`, making them glob
 
 - **Triage the follow-ups list** — the Self-Correction Loop section in `~/.claude/CLAUDE.md` has open follow-ups. Some are actionable now (session-start memory report), others are speculative. Prioritize or prune before the list becomes a stale backlog.
 - ~~**Version-control global CLAUDE.md**~~ — Done. Tracked at `config/CLAUDE.md`, symlinked to `~/.claude/CLAUDE.md`.
+- **Refine commit-authoring guidance** ([#46](https://github.com/dgowrie/claude-workflows/issues/46)) - the inline Git Conventions in `config/CLAUDE.md` has gaps (commit splitting, ordering/narrative, folding out corrective churn, body/footer/scope conventions). Consider extracting into a dedicated `config/rules/` file. Firm constraint: whatever lands must stay concise to limit context-window cost.
 
 ### Skills
 
