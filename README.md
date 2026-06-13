@@ -76,7 +76,7 @@ Subagent definitions in `agents/` are symlinked into `~/.claude/agents/`, making
 ~/.claude/agents/pr-code-reviewer.md -> ~/dev/claude-workflows/agents/pr-code-reviewer.md
 ```
 
-- [`pr-code-reviewer`](agents/pr-code-reviewer.md) - reviews diffs and PRs against the global CLAUDE.md guidelines, the `/pr-review` skill, and the rules; applies epistemic-honesty labeling, stages feedback via pending review, and triages bot comments. Has persistent user-scoped memory.
+- [`pr-code-reviewer`](agents/pr-code-reviewer.md) - isolated, memory-backed code reviewer for pre-push local diffs (no PR required), fresh-context PR analysis, or standalone bot-comment triage. Analysis-only: returns findings and a recommended next action against the global CLAUDE.md guidelines and rules, applying epistemic-honesty labeling; the main conversation makes any GitHub writes. For a normal stage-and-submit PR review, use the `/pr-review` skill directly. Has persistent user-scoped memory.
 
 ## Improvements to consider
 
