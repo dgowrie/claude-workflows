@@ -63,6 +63,8 @@ For each issue: describe with file/line references, present 2-3 options (includi
 
 **Bug fixes**: regression test first (red), then fix (green). Applies to bugs from development, CI, or review feedback alike.
 
+**Frontend test selectors**: prefer a11y/semantic queries (`getByRole`, `getByLabelText`, `getByText`) over `data-testid` whenever the target has an accessible handle - they test what users and assistive tech actually perceive and survive refactors better. Don't add new `data-testid`s, or query existing ones, when a semantic query works. Fall back to `data-testid` only for decorative or layout-only elements with no accessible role. Leave pre-existing testids in place (they may back e2e selectors); just don't query by them in new tests.
+
 ## Definition of Done
 
 - **Validate before pushing.** Tests pass, typecheck clean, lint clean. Full suite before push, even for "low-risk" changes.
