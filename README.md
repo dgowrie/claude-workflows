@@ -54,6 +54,7 @@ Changes to a skill file in the repo are immediately live — no copy or sync ste
 - [`/tdd`](skills/tdd/SKILL.md) — test-driven development with red-green-refactor loop and reference guides
 - [`/review-thorough`](skills/review-thorough/SKILL.md) — wraps built-in `/review` and additionally evaluates bot reviews including resolved threads
 - [`/security-audit`](skills/security-audit/SKILL.md) — three-phase source-code vulnerability scan (dep audit, parallelized source review, verification + false-positive triage) with GitHub issue tracking
+- [`/check-npm`](skills/check-npm/SKILL.md) - audit a JS/TS repo's npm/yarn/pnpm config for supply-chain hardening (lifecycle scripts, git deps, ignore-scripts, min-release-age)
 
 ### Rules
 
