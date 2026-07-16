@@ -56,7 +56,7 @@ if [[ -d "$COWORK" ]]; then
 
     # Ensure canonical symlink exists (repo -> canonical)
     if [[ ! -L "$CANONICAL/$skill_name" ]]; then
-      [[ -d "$CANONICAL/$skill_name" ]] && rm -rf "$CANONICAL/$skill_name"
+      [[ -d "$CANONICAL/$skill_name" ]] && rm -rf "${CANONICAL:?}/${skill_name:?}"
       ln -s "$REPO/$skill_name" "$CANONICAL/$skill_name"
       log "Linked repo/$skill_name -> canonical"
     fi
@@ -138,6 +138,14 @@ fi
 for repo_skill in "$REPO"/*/; do
   [[ ! -d "$repo_skill" ]] && continue
   skill_name=$(basename "$repo_skill")
+  # Skip skills deliberately kept out of git (matched by .gitignore or
+  # .git/info/exclude). git check-ignore is authoritative here: it honors the
+  # exact ignore rules that keep these dirs out of `git status`, so one source
+  # of truth silences the reminder too - no separate skip-list to drift or,
+  # since this repo is public, to leak the intentionally-uncommitted names.
+  if git -C "$REPO/.." check-ignore -q "skills/$skill_name"; then
+    continue
+  fi
   # Check if tracked by git
   if ! git -C "$REPO/.." ls-files --error-unmatch "skills/$skill_name/SKILL.md" >/dev/null 2>&1; then
     log "ACTION NEEDED: '$skill_name' imported to repo but not yet committed - run: cd ~/dev/claude-workflows && git add skills/$skill_name && git commit"
