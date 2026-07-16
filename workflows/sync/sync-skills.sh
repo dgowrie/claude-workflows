@@ -56,7 +56,7 @@ if [[ -d "$COWORK" ]]; then
 
     # Ensure canonical symlink exists (repo -> canonical)
     if [[ ! -L "$CANONICAL/$skill_name" ]]; then
-      [[ -d "$CANONICAL/$skill_name" ]] && rm -rf "$CANONICAL/$skill_name"
+      [[ -d "$CANONICAL/$skill_name" ]] && rm -rf "${CANONICAL:?}/${skill_name:?}"
       ln -s "$REPO/$skill_name" "$CANONICAL/$skill_name"
       log "Linked repo/$skill_name -> canonical"
     fi
