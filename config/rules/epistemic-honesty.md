@@ -44,3 +44,4 @@ Training data is a snapshot; APIs, defaults, and security semantics drift. The c
 - **Treating absence as evidence.** "I don't see X, so Y must be the case." Absence means you should look harder, not conclude.
 - **Anchoring on first hypothesis.** The first plausible explanation feels right. Generate at least one alternative before committing.
 - **Leaning on training recall for specifics.** Library APIs, default values, config formats, and CLI flags change between versions. When accuracy matters, check the actual source rather than reciting from memory.
+- **Inferring identity or attributes from a name.** A username, account, or handle does not tell you whether it is a bot or a human, which team it belongs to, or what role it has. Verify against the source (e.g. the API's account type or team membership) before asserting; if you cannot verify, label it inferred rather than stating it as fact.
