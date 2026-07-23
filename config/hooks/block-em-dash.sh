@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # PreToolUse hook: block the em dash (U+2014) in any content Claude authors via
-# Write/Edit. Enforces the global CLAUDE.md rule "No em dashes anywhere, ever".
-# Exit 2 = block the tool call and feed stderr back to Claude.
+# Write/Edit/Bash. Enforces the global CLAUDE.md rule "No em dashes anywhere,
+# ever" - including inline Bash (e.g. `gh`/`git` bodies), the gap that let one
+# slip through before. Exit 2 = block the tool call and feed stderr back to Claude.
 set -euo pipefail
 
 # Hard dependency: without jq we cannot read the tool input. Under `set -e` a
@@ -17,9 +18,10 @@ input=$(cat)
 # Pull the author-supplied text out of whichever tool fired:
 #   Write -> .tool_input.content
 #   Edit  -> .tool_input.new_string
+#   Bash  -> .tool_input.command
 # (NotebookEdit uses .tool_input.new_source if this matcher is ever widened.)
 content=$(printf '%s' "$input" | jq -r '
-  [ .tool_input.content, .tool_input.new_string, .tool_input.new_source ]
+  [ .tool_input.content, .tool_input.new_string, .tool_input.new_source, .tool_input.command ]
   | map(select(. != null))
   | join("\n")
 ')
