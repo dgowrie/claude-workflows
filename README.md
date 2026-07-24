@@ -69,6 +69,19 @@ Rules in `config/rules/` are symlinked into `~/.claude/rules/`, making them glob
 - [Self-Correction Loop](config/rules/self-correction-loop.md) — on correction, propose a CLAUDE.md or rule update before continuing
 - [Epistemic Honesty](config/rules/epistemic-honesty.md) — label verified vs inferred vs assumed; self-challenge before committing to conclusions
 
+### Hooks
+
+Hook scripts in `config/hooks/` are symlinked into `~/.claude/hooks/`. Unlike skills and rules, a hook script is inert until it is *wired* to an event in `~/.claude/settings.json` (a machine-local file that is **not** tracked in this repo). Provisioning a hook is therefore two steps: symlink the script, then add its `hooks` entry (event + matcher) to `settings.json`.
+
+```
+~/.claude/hooks/block-em-dash.sh -> ~/dev/claude-workflows/config/hooks/block-em-dash.sh
+```
+
+- [`block-em-dash.sh`](config/hooks/block-em-dash.sh) - PreToolUse hook enforcing the no-em-dash rule. Requires matcher `Write|Edit|Bash` in `settings.json` so it inspects inline Bash command bodies (`gh`/`git` titles, commit subjects), not just `Write`/`Edit`. Tested via [`block-em-dash.test.sh`](config/hooks/block-em-dash.test.sh) (`bash config/hooks/block-em-dash.test.sh`).
+- [`block-claude-attribution.sh`](config/hooks/block-claude-attribution.sh) - PreToolUse hook blocking Claude attribution footers and `Co-Authored-By` trailers.
+
+Because the matcher wiring lives in untracked `settings.json`, a committed hook will not fire for anyone who has not mirrored the matcher locally. Tracking that drift is [#24](https://github.com/dgowrie/claude-workflows/issues/24).
+
 ### Agents
 
 Subagent definitions in `agents/` are symlinked into `~/.claude/agents/`, making them available to the Agent tool across all projects. Like skills and rules, edits in the repo are immediately live.
