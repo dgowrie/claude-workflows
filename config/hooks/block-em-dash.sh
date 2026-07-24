@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# PreToolUse hook: block the em dash (U+2014) in any content Claude authors via
-# Write/Edit/Bash. Enforces the global CLAUDE.md rule "No em dashes anywhere,
-# ever" - including inline Bash (e.g. `gh`/`git` bodies), the gap that let one
-# slip through before. Exit 2 = block the tool call and feed stderr back to Claude.
+# PreToolUse hook: block the em dash (U+2014), en dash (U+2013), and horizontal
+# bar (U+2015) in any content Claude authors via Write/Edit/Bash. Enforces the
+# global CLAUDE.md rule "No em dashes anywhere, ever" - including inline Bash
+# (e.g. `gh`/`git` bodies), the gap that let one slip through before. Exit 2 =
+# block the tool call and feed stderr back to Claude.
 set -euo pipefail
 
 # Hard dependency: without jq we cannot read the tool input. Under `set -e` a
