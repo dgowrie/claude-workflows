@@ -10,7 +10,7 @@ HOOK="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/block-em-dash.sh"
 
 # Preflight: fail clearly on a fresh machine rather than with confusing
 # "jq: command not found" or path errors mid-run.
-command -v jq >/dev/null 2>&1 || { echo "SKIP: jq not found on PATH; these tests build payloads with jq." >&2; exit 1; }
+command -v jq >/dev/null 2>&1 || { echo "ERROR: jq not found on PATH; these tests build payloads with jq. Install jq, then retry." >&2; exit 1; }
 [ -x "$HOOK" ] || { echo "ERROR: hook not found or not executable: $HOOK" >&2; exit 1; }
 
 EM=$(printf '\xe2\x80\x94')   # U+2014 EM DASH
