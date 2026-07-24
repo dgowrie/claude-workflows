@@ -13,13 +13,16 @@ BAR=$(printf '\xe2\x80\x95')  # U+2015 HORIZONTAL BAR
 pass=0; fail=0
 
 check() { # name expected_exit json
-  local name=$1 want=$2 json=$3 got
-  printf '%s' "$json" | "$HOOK" >/dev/null 2>&1
+  local name=$1 want=$2 json=$3 got err
+  # Capture stderr (discard stdout) so an unexpected hook error is visible on
+  # failure instead of looking like a legitimate block/pass exit code.
+  err=$(printf '%s' "$json" | "$HOOK" 2>&1 >/dev/null)
   got=$?
   if [ "$got" -eq "$want" ]; then
     printf 'PASS  %-52s (exit %s)\n' "$name" "$got"; pass=$((pass+1))
   else
     printf 'FAIL  %-52s (want %s got %s)\n' "$name" "$want" "$got"; fail=$((fail+1))
+    [ -n "$err" ] && printf '      stderr: %s\n' "$err"
   fi
 }
 
