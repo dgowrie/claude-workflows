@@ -7,6 +7,12 @@
 set -uo pipefail
 
 HOOK="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/block-em-dash.sh"
+
+# Preflight: fail clearly on a fresh machine rather than with confusing
+# "jq: command not found" or path errors mid-run.
+command -v jq >/dev/null 2>&1 || { echo "SKIP: jq not found on PATH; these tests build payloads with jq." >&2; exit 1; }
+[ -x "$HOOK" ] || { echo "ERROR: hook not found or not executable: $HOOK" >&2; exit 1; }
+
 EM=$(printf '\xe2\x80\x94')   # U+2014 EM DASH
 EN=$(printf '\xe2\x80\x93')   # U+2013 EN DASH
 BAR=$(printf '\xe2\x80\x95')  # U+2015 HORIZONTAL BAR
