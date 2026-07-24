@@ -42,6 +42,15 @@ check "Write clean passes"              0 "$(j Write content "clean hyphen - tex
 check "Edit + em dash blocks"           2 "$(j Edit new_string "a ${EM} b")"
 check "Edit clean passes"               0 "$(j Edit new_string "a - b")"
 
+# Essential guarantee: removing a dash must be allowed. old_string is NOT
+# scanned, so a dash there with a clean new_string passes.
+check "Edit removing a dash passes"     0 "$(jq -n --arg o "a ${EM} b" --arg n "a - b" '{tool_name:"Edit", tool_input:{old_string:$o, new_string:$n}}')"
+
+# MultiEdit: new_string in any edit is scanned (defensive; see hook comment).
+check "MultiEdit + em dash blocks"      2 "$(jq -n --arg d "x ${EM} y" '{tool_name:"MultiEdit", tool_input:{edits:[{old_string:"p",new_string:"clean"},{old_string:"q",new_string:$d}]}}')"
+check "MultiEdit clean passes"          0 "$(jq -n '{tool_name:"MultiEdit", tool_input:{edits:[{old_string:"p",new_string:"a - b"}]}}')"
+check "MultiEdit dash in old passes"    0 "$(jq -n --arg o "a ${EM} b" '{tool_name:"MultiEdit", tool_input:{edits:[{old_string:$o,new_string:"clean"}]}}')"
+
 # False-positive guards: the locale hazard fixed in PR #44 must stay fixed.
 check "Bash + accented char passes"     0 "$(j Bash command "echo café résumé")"
 check "Bash + emoji passes"             0 "$(j Bash command "echo done 🎉")"
@@ -53,6 +62,7 @@ check "Bash grep via \\x escape passes" 0 "$(j Bash command 'grep -rn $'"'"'\xe2
 # Boundary cases.
 check "Bash empty command passes"       0 "$(j Bash command "")"
 check "Unrelated tool passes"           0 '{"tool_name":"Read","tool_input":{"file_path":"/x"}}'
+check "Malformed JSON fails closed"     2 'this is not json'
 
 echo "-----"
 echo "pass=$pass fail=$fail"
