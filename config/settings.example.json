@@ -1,5 +1,4 @@
 {
-  "model": "claude-opus-4-8[1m]",
   "attribution": {
     "commit": "",
     "pr": ""
@@ -26,17 +25,5 @@
         ]
       }
     ]
-  },
-  "enabledPlugins": {},
-  "sandbox": {
-    "enabled": true,
-    "mode": "auto-allow"
-  },
-  "effortLevel": "high",
-  "skipDangerousModePermissionPrompt": true,
-  "theme": "dark",
-  "editorMode": "normal",
-  "autoCompactEnabled": true,
-  "skipAutoPermissionPrompt": true,
-  "tui": "fullscreen"
+  }
 }

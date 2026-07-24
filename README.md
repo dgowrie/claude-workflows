@@ -7,8 +7,8 @@ Claude Code's built-in persistence (memory, plans) is useful but fragile: memori
 ## Structure
 
 ```
-config/        Global CLAUDE.md, rules, hooks, and settings.json, symlinked into ~/.claude/
-config/scripts/ Provisioning + drift checks for settings.json and hook wiring (see its README)
+config/        Global CLAUDE.md, rules, and hooks, symlinked into ~/.claude/
+config/scripts/ Settings template + hook-wiring checks (see its README)
 internals/     How Claude Code works under the hood
 workflows/     Patterns and practices for effective use
 explorations/  Session notes and behavioral findings

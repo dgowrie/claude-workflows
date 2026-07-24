@@ -1,21 +1,21 @@
 #!/usr/bin/env bash
-# Link the tracked config/settings.json into ~/.claude, and check for drift.
+# Provision the tracked Claude Code settings template into ~/.claude, and check
+# that the live settings still wire every committed hook.
 #
-# claude-workflows #24: ~/.claude/settings.json holds the hook *wiring* that makes
-# committed hooks fire, plus model/theme/sandbox prefs. It was an untracked
-# regular file, so its state could drift from the repo silently. This script
-# makes it a symlink to the tracked config/settings.json (source of truth) and,
-# in --check mode, reports drift.
-#
-# KNOWN CAVEAT (unverified): Claude Code's own settings writer (e.g. `/config`,
-# changing the theme in the TUI) may REPLACE settings.json rather than write
-# through the symlink, silently turning it back into a regular file. --check
-# detects that case ("regular file where a symlink is expected") so it can be
-# re-linked; the pre-existing file is preserved as a .backup so no edits are lost.
+# claude-workflows #24: personal posture keys (model, theme, sandbox, skip*
+# prompts) must NOT be committed to this public repo, and at user-global scope
+# there is a single settings.json with no private overlay (verified: a user-level
+# settings.local.json is not honored for these keys). So instead of tracking or
+# symlinking the live file, we track a template, config/settings.example.json,
+# holding only shareable keys (hook wiring + attribution policy). You copy it once
+# to the untracked ~/.claude/settings.json (--init) and add your private posture
+# keys there. --check then asserts the live file still wires every committed hook.
 #
 # Usage:
-#   install-settings.sh          link settings.json (backs up any existing file)
-#   install-settings.sh --check  report link status + drift; nonzero if drifted
+#   install-settings.sh            (--check) verify live settings wire all hooks
+#   install-settings.sh --check    same as no args
+#   install-settings.sh --init     copy the template to ~/.claude/settings.json
+#                                   (only if it does not already exist)
 #
 # Override the target dir for testing:  CLAUDE_CONFIG_DIR=/tmp/fake ./install-settings.sh
 set -euo pipefail
@@ -23,81 +23,65 @@ set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 config_dir="$(cd "$here/.." && pwd)"
 
-source_file="$config_dir/settings.json"
+source_file="$config_dir/settings.example.json"
 target_dir="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 target_file="$target_dir/settings.json"
 
-mode="link"
-if [ "${1:-}" = "--check" ]; then
-  mode="check"
-elif [ -n "${1:-}" ]; then
-  echo "usage: install-settings.sh [--check]" >&2
+mode="check"
+case "${1:-}" in
+  ""|--check) mode="check" ;;
+  --init)     mode="init" ;;
+  *) echo "usage: install-settings.sh [--check|--init]" >&2; exit 2 ;;
+esac
+
+if ! command -v jq >/dev/null 2>&1; then
+  echo "error: install-settings requires 'jq' on PATH." >&2
   exit 2
 fi
 
 if [ ! -f "$source_file" ]; then
-  echo "error: tracked settings not found: $source_file" >&2
+  echo "error: tracked settings template not found: $source_file" >&2
   exit 2
 fi
 
-# resolve_link <path> -> prints the symlink target (absolute) or empty if not a link
-resolve_link() {
-  if [ -L "$1" ]; then
-    local dest ; dest="$(readlink "$1")"
-    case "$dest" in
-      /*) printf '%s' "$dest" ;;
-      *)  printf '%s' "$(cd "$(dirname "$1")" && cd "$(dirname "$dest")" && pwd)/$(basename "$dest")" ;;
-    esac
-  fi
-}
-
 run_validation() {
-  bash "$here/validate-hook-wiring.sh" "$source_file" "$config_dir/hooks"
+  bash "$here/validate-hook-wiring.sh" "$1" "$config_dir/hooks"
 }
 
-if [ "$mode" = "check" ]; then
-  status=0
-  if [ -L "$target_file" ]; then
-    dest="$(resolve_link "$target_file")"
-    if [ "$dest" = "$source_file" ]; then
-      echo "ok: $target_file -> $source_file"
-    else
-      echo "WARN: $target_file is a symlink to '$dest', not the tracked $source_file" >&2
-      status=1
-    fi
-  elif [ -f "$target_file" ]; then
-    if cmp -s "$target_file" "$source_file"; then
-      echo "WARN: $target_file is a regular file (not a symlink) but its content matches the tracked file." >&2
-      echo "      A Claude Code settings write may have replaced the symlink. Re-run install-settings.sh to re-link." >&2
-    else
-      echo "DRIFT: $target_file is a regular file and differs from tracked $source_file." >&2
-      echo "      Reconcile the differences into the tracked file, then re-run install-settings.sh." >&2
-    fi
-    status=1
-  else
-    echo "NOT INSTALLED: $target_file does not exist. Run install-settings.sh to link it." >&2
-    status=1
+if [ "$mode" = "init" ]; then
+  # Never clobber an existing live file: it holds private posture keys.
+  if [ -e "$target_file" ] || [ -L "$target_file" ]; then
+    echo "exists: $target_file already present; refusing to overwrite." >&2
+    echo "        Reconcile by hand, or run install-settings.sh --check to verify wiring." >&2
+    exit 1
   fi
-  # Wiring must hold regardless of link status.
-  run_validation
-  exit "$status"
-fi
-
-# mode = link
-if [ -L "$target_file" ] && [ "$(resolve_link "$target_file")" = "$source_file" ]; then
-  echo "already linked: $target_file -> $source_file"
-  run_validation
+  mkdir -p "$target_dir"
+  cp "$source_file" "$target_file"
+  echo "created $target_file from $source_file"
+  echo "next: add your private posture keys (model, theme, sandbox, skip*) to $target_file;"
+  echo "      they are intentionally NOT tracked. See config/scripts/README.md."
+  run_validation "$target_file"
   exit 0
 fi
 
-mkdir -p "$target_dir"
-
-if [ -e "$target_file" ] || [ -L "$target_file" ]; then
-  backup="$target_file.backup.$(date +%Y%m%d%H%M%S)"
-  mv "$target_file" "$backup"
-  echo "backed up existing settings to $backup"
+# mode = check: the live file must exist and wire every committed hook.
+if [ ! -f "$target_file" ]; then
+  echo "NOT INSTALLED: $target_file does not exist. Run install-settings.sh --init to create it." >&2
+  exit 1
 fi
 
-ln -s "$source_file" "$target_file"
-echo "linked $target_file -> $source_file"
-run_validation
+if ! jq -e . "$target_file" >/dev/null 2>&1; then
+  echo "error: live settings is not valid JSON: $target_file" >&2
+  exit 2
+fi
+
+# Soft drift signal: the live hook wiring differs from the tracked template.
+# Non-fatal (your matchers may legitimately differ), but surfaces silent changes
+# so the template can be kept honest.
+if ! jq -e -s '.[0].hooks == .[1].hooks' "$target_file" "$source_file" >/dev/null; then
+  echo "note: live hooks differ from the tracked template ($source_file)." >&2
+  echo "      If intentional, update the template so review reflects reality." >&2
+fi
+
+# Hard guarantee (#24): every committed hook is actually wired in the LIVE file.
+run_validation "$target_file"
