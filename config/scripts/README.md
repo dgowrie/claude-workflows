@@ -65,7 +65,7 @@ private posture keys). After `--init`, add your posture keys by hand:
 ```jsonc
 {
   // ...copied from settings.example.json (hooks, attribution)...
-  "model": "claude-opus-4-8[1m]",
+  "model": "<your-model-id>",
   "theme": "dark",
   "sandbox": { "enabled": true, "mode": "auto-allow" },
   "skipDangerousModePermissionPrompt": true,
