@@ -115,6 +115,11 @@ check "command with args / shell prefix wired" 0 "$args_and_shell"
 check "null command entry is skipped"          0 "$null_command"
 check "foobar.sh does not satisfy foo.sh"      1 "$foobar_not_foo"  "foo.sh"
 
+# valid JSON with unexpected types for hooks / PreToolUse must be treated as
+# "no wiring found" (clean rc=1), not crash jq under set -e.
+check "hooks is an array -> clean fail, no jq crash"      1 '{ "hooks": [] }'                        "foo.sh"
+check "PreToolUse is an object -> clean fail"             1 '{ "hooks": { "PreToolUse": {} } }'      "foo.sh"
+
 # missing settings file -> nonzero with a clear error
 out="$(bash "$script" "$work/does-not-exist.json" "$hooks_dir" 2>&1)"; got=$?
 if [ "$got" -ne 0 ] && printf '%s' "$out" | grep -qiF "not found"; then

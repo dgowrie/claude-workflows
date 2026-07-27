@@ -49,11 +49,16 @@ fi
 
 # Every PreToolUse command with its matcher, one "<command>\t<matcher>" per line.
 # Skip null/empty commands so a malformed entry can't surface as the string "null".
+# Type guards (`?` and explicit array checks) keep valid-but-oddly-typed JSON
+# (e.g. "hooks": [] or "PreToolUse": {}) from crashing jq under `set -e`; such
+# structures are simply treated as "no wiring found".
 wired="$(jq -r '
-  (.hooks.PreToolUse // [])[]
-  | (.matcher // "") as $m
-  | (.hooks // [])[]
-  | select(.type == "command")
+  ((.hooks? // {}).PreToolUse? // []) as $groups
+  | (if ($groups | type) == "array" then $groups else [] end)[]
+  | (.matcher? // "") as $m
+  | (.hooks? // [])
+  | (if type == "array" then . else [] end)[]
+  | select((.type? // "") == "command")
   | select(.command != null and .command != "")
   | "\(.command)\t\($m)"
 ' "$settings")"
