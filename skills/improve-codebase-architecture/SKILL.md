@@ -1,6 +1,7 @@
 ---
 name: improve-codebase-architecture
 user-invocable: true
+disable-model-invocation: true
 description: >
   Scan a codebase for deepening opportunities, present them as a visual HTML report,
   then grill through whichever one you pick. Use for a repo-wide architecture review
