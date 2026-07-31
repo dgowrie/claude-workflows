@@ -2,10 +2,10 @@
 name: grilling
 user-invocable: true
 description: >
-  Grill the user relentlessly about a plan, decision, or idea, walking the decision tree
-  branch by branch and recommending an answer for each. Use when another skill needs a
-  decision-tree grilling loop, or when the user wants to stress-test their thinking. This is
-  Matt Pocock's variant; for the customized version see /grill-me.
+  Decision-tree grilling loop for the architecture skills: walk a chosen candidate's decisions
+  branch by branch, recommending an answer for each. Invoked by name from
+  /improve-codebase-architecture and /codebase-design. Matt Pocock's variant of /grill-me;
+  for general plan or design stress-testing, use /grill-me instead.
 ---
 
 <!-- Based on https://github.com/mattpocock/skills/tree/main/skills/productivity/grilling -->

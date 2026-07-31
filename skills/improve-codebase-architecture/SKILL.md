@@ -5,8 +5,7 @@ disable-model-invocation: true
 description: >
   Scan a codebase for deepening opportunities, present them as a visual HTML report,
   then grill through whichever one you pick. Use for a repo-wide architecture review
-  focused on module depth, testability, and AI-navigability. Prefer explicit invocation
-  (/improve-codebase-architecture) - it is a multi-phase operation.
+  focused on module depth, testability, and AI-navigability.
 ---
 
 <!-- Based on https://github.com/mattpocock/skills/tree/main/skills/engineering/improve-codebase-architecture -->

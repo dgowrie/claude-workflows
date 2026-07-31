@@ -2,9 +2,10 @@
 name: domain-modeling
 user-invocable: true
 description: >
-  Build and sharpen a project's domain model. Use when the user wants to pin down domain
-  terminology or a ubiquitous language, record an architectural decision, or when another
-  skill needs to maintain the domain model.
+  Build and sharpen a project's domain model (CONTEXT.md glossary, docs/adr/ decisions).
+  Primarily a dependency the architecture skills invoke by name to keep the model current;
+  also invoke it directly when the task is specifically to pin down domain terminology or
+  record an architectural decision.
 ---
 
 <!-- Based on https://github.com/mattpocock/skills/tree/main/skills/engineering/domain-modeling -->

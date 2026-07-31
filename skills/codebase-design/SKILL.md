@@ -2,9 +2,10 @@
 name: codebase-design
 user-invocable: true
 description: >
-  Shared vocabulary for designing deep modules. Use when the user wants to design or improve
-  a module's interface, find deepening opportunities, decide where a seam goes, make code more
-  testable or AI-navigable, or when another skill needs the deep-module vocabulary.
+  Shared vocabulary for designing deep modules (module, interface, depth, seam, adapter,
+  leverage, locality). Primarily a dependency the architecture skills invoke by name; also
+  invoke it directly when you are actively shaping one known module's interface, deciding
+  where a seam goes, or running the design-it-twice exploration.
 ---
 
 <!-- Based on https://github.com/mattpocock/skills/tree/main/skills/engineering/codebase-design -->
