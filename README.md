@@ -58,7 +58,7 @@ Changes to a skill file in the repo are immediately live — no copy or sync ste
 - [`/improve-codebase-architecture`](skills/improve-codebase-architecture/SKILL.md) - repo-wide architecture review: scan for deepening opportunities, render them as a visual HTML report, then grill through the one you pick (adapted from [mattpocock/skills](https://github.com/mattpocock/skills))
 - [`/codebase-design`](skills/codebase-design/SKILL.md) - shared deep-module vocabulary (module, interface, depth, seam, adapter, leverage, locality) plus deepening and design-it-twice guides; underpins `/improve-codebase-architecture`
 - [`/domain-modeling`](skills/domain-modeling/SKILL.md) - build and sharpen a project's domain model (`CONTEXT.md` glossary, `docs/adr/` decisions); companion to `/improve-codebase-architecture`
-- [`/grilling`](skills/grilling/SKILL.md) - Matt Pocock's decision-tree grilling loop, kept distinct from the customized `/grill-me` so the architecture skills can call it by name
+- [`/grilling`](skills/grilling/SKILL.md) - Matt Pocock's decision-tree grilling loop, kept distinct from the customized `/grill-me` so `/improve-codebase-architecture` can call it by name
 
 ### Rules
 
