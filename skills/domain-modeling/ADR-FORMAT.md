@@ -1,8 +1,13 @@
 # ADR Format
 
-ADRs live in `docs/adr/` and use sequential numbering: `0001-slug.md`, `0002-slug.md`, etc.
+ADRs use sequential numbering: `0001-slug.md`, `0002-slug.md`, etc.
 
-Create the `docs/adr/` directory lazily, only when the first ADR is needed.
+Where they live follows the repo's context layout (see [SKILL.md](./SKILL.md)):
+
+- **Single context:** one `docs/adr/` at the repo root.
+- **Multiple contexts** (a `CONTEXT-MAP.md` exists): system-wide decisions go in the root `docs/adr/`; a decision scoped to one context goes in that context's own `docs/adr/`, alongside its `CONTEXT.md`. Pick the narrowest scope the decision actually binds.
+
+Create the directory lazily, only when the first ADR for that scope is needed.
 
 ## Template
 
@@ -24,7 +29,7 @@ Only include these when they add genuine value. Most ADRs won't need them.
 
 ## Numbering
 
-Scan `docs/adr/` for the highest existing number and increment by one.
+Scan the `docs/adr/` directory for the scope you are writing into, take the highest existing number, and increment by one. Numbering is per-directory: a context's ADRs and the system-wide ADRs each start at `0001`.
 
 ## When to offer an ADR
 
