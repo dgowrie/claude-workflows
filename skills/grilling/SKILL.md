@@ -4,12 +4,12 @@ user-invocable: true
 description: >
   Decision-tree grilling loop for the architecture skills: walk a chosen candidate's decisions
   branch by branch, recommending an answer for each. Invoked by name from
-  /improve-codebase-architecture and /codebase-design. Matt Pocock's variant of /grill-me;
+  /improve-codebase-architecture. Matt Pocock's variant of /grill-me;
   for general plan or design stress-testing, use /grill-me instead.
 ---
 
 <!-- Based on https://github.com/mattpocock/skills/tree/main/skills/productivity/grilling -->
-<!-- Kept as a distinct skill from the customized /grill-me so improve-codebase-architecture and codebase-design can call it by name without clobbering the local customization. -->
+<!-- Kept as a distinct skill from the customized /grill-me so improve-codebase-architecture can call it by name without clobbering the local customization. -->
 
 # Grilling
 
