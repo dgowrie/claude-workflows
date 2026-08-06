@@ -26,6 +26,8 @@ When adding a rule to `config/rules/`:
 2. Symlink into `~/.claude/rules/`: `ln -s ~/dev/claude-workflows/config/rules/<name>.md ~/.claude/rules/<name>.md`
 3. Add an entry to the Rules section in `README.md`
 
+**The repo is the single source of truth.** Author the rule in `config/rules/` and reach `~/.claude/rules/` only through the symlink. Never write a rule as a plain file directly in `~/.claude/rules/`; that leaves it live locally but untracked, so it never reaches the repo or peers. This applies even when a self-correction fires mid-task in another project: create the file under `config/rules/` in this repo, then symlink. If you find a plain (non-symlink) rule already sitting in `~/.claude/rules/`, migrate it: move the content into `config/rules/<name>.md`, replace the original with a symlink, and add the README entry (steps 1-3 above).
+
 ## Adding a new skill
 
 When adding a skill to `skills/`:

@@ -55,6 +55,7 @@ Changes to a skill file in the repo are immediately live — no copy or sync ste
 - [`/review-thorough`](skills/review-thorough/SKILL.md) — wraps built-in `/review` and additionally evaluates bot reviews including resolved threads
 - [`/security-audit`](skills/security-audit/SKILL.md) — three-phase source-code vulnerability scan (dep audit, parallelized source review, verification + false-positive triage) with GitHub issue tracking
 - [`/check-npm`](skills/check-npm/SKILL.md) - audit a JS/TS repo's npm/yarn/pnpm config for supply-chain hardening (lifecycle scripts, git deps, ignore-scripts, min-release-age)
+- [`/explain-usage`](skills/explain-usage/SKILL.md) - explain where a session's tokens went with one plain-language chart, weighting cache reads/writes and output to show effective usage by group
 - [`/improve-codebase-architecture`](skills/improve-codebase-architecture/SKILL.md) - repo-wide architecture review: scan for deepening opportunities, render them as a visual HTML report, then grill through the one you pick (adapted from [mattpocock/skills](https://github.com/mattpocock/skills))
 - [`/codebase-design`](skills/codebase-design/SKILL.md) - shared deep-module vocabulary (module, interface, depth, seam, adapter, leverage, locality) plus deepening and design-it-twice guides; underpins `/improve-codebase-architecture`
 - [`/domain-modeling`](skills/domain-modeling/SKILL.md) - build and sharpen a project's domain model (`CONTEXT.md` glossary, `docs/adr/` decisions); companion to `/improve-codebase-architecture`
@@ -72,6 +73,7 @@ Rules in `config/rules/` are symlinked into `~/.claude/rules/`, making them glob
 - [Memory Hygiene](config/rules/memory-hygiene.md) — guidelines for memory file size, deduplication, and lifecycle
 - [Self-Correction Loop](config/rules/self-correction-loop.md) — on correction, propose a CLAUDE.md or rule update before continuing
 - [Epistemic Honesty](config/rules/epistemic-honesty.md) — label verified vs inferred vs assumed; self-challenge before committing to conclusions
+- [Temp-File Path Discipline](config/rules/temp-file-path-discipline.md) - write and read the same absolute path for file-consuming commands (`--body-file`, `-F`, `@file`); never assume `$TMPDIR` is the scratchpad; verify outward-facing artifacts after creation
 
 ### Hooks
 
