@@ -56,6 +56,10 @@ Changes to a skill file in the repo are immediately live — no copy or sync ste
 - [`/security-audit`](skills/security-audit/SKILL.md) — three-phase source-code vulnerability scan (dep audit, parallelized source review, verification + false-positive triage) with GitHub issue tracking
 - [`/check-npm`](skills/check-npm/SKILL.md) - audit a JS/TS repo's npm/yarn/pnpm config for supply-chain hardening (lifecycle scripts, git deps, ignore-scripts, min-release-age)
 - [`/explain-usage`](skills/explain-usage/SKILL.md) - explain where a session's tokens went with one plain-language chart, weighting cache reads/writes and output to show effective usage by group
+- [`/improve-codebase-architecture`](skills/improve-codebase-architecture/SKILL.md) - repo-wide architecture review: scan for deepening opportunities, render them as a visual HTML report, then grill through the one you pick (adapted from [mattpocock/skills](https://github.com/mattpocock/skills))
+- [`/codebase-design`](skills/codebase-design/SKILL.md) - shared deep-module vocabulary (module, interface, depth, seam, adapter, leverage, locality) plus deepening and design-it-twice guides; underpins `/improve-codebase-architecture`
+- [`/domain-modeling`](skills/domain-modeling/SKILL.md) - build and sharpen a project's domain model (`CONTEXT.md` glossary, `docs/adr/` decisions); companion to `/improve-codebase-architecture`
+- [`/grilling`](skills/grilling/SKILL.md) - Matt Pocock's decision-tree grilling loop, kept distinct from the customized `/grill-me` so `/improve-codebase-architecture` can call it by name
 
 ### Rules
 
