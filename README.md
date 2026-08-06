@@ -55,6 +55,7 @@ Changes to a skill file in the repo are immediately live — no copy or sync ste
 - [`/review-thorough`](skills/review-thorough/SKILL.md) — wraps built-in `/review` and additionally evaluates bot reviews including resolved threads
 - [`/security-audit`](skills/security-audit/SKILL.md) — three-phase source-code vulnerability scan (dep audit, parallelized source review, verification + false-positive triage) with GitHub issue tracking
 - [`/check-npm`](skills/check-npm/SKILL.md) - audit a JS/TS repo's npm/yarn/pnpm config for supply-chain hardening (lifecycle scripts, git deps, ignore-scripts, min-release-age)
+- [`/explain-usage`](skills/explain-usage/SKILL.md) - explain where a session's tokens went with one plain-language chart, weighting cache reads/writes and output to show effective usage by group
 
 ### Rules
 
