@@ -59,9 +59,10 @@ directly against the branch diff; that is its own documented niche.
 
 When `findings` is supplied (for example `/pr-review` just ran and produced them), always run Phase
 1b, the independent subagent. A candidate set you already hold is exactly the input Phase 1b is
-meant to be uncontaminated by. Phase 1a is conditional: if the supplied findings came from a Steps
-3 to 7 pass at the same pinned SHA, 1a reduces to re-verifying them against that SHA; otherwise
-(older SHA, human-supplied, bot-supplied) run 1a in full, or Phase 1 stops being two reads.
+meant to be uncontaminated by. Phase 1a is conditional: if the supplied findings came from a
+`/pr-review` pass over Steps 3 through 7 at the same pinned SHA, 1a reduces to re-verifying them
+against that SHA; otherwise (older SHA, human-supplied, bot-supplied) run 1a in full, or Phase 1
+stops being two reads.
 
 ---
 
