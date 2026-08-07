@@ -239,12 +239,14 @@ Note: the pull number is required in the path. The comment-level GET endpoint (`
 
 ### Resolving threads after reply
 
-After replying to bot review threads, resolve every thread that received a definitive reply (accepted or rejected). An open thread signals "still needs attention"; a replied-to rejection is definitively addressed and should be resolved too. Timing depends on how the reply was posted:
+**Only resolve threads we authored.** Reply to reviewer and bot threads, then leave them open. An open thread keeps the flagged concern and our response visible so the reviewer can weigh in; resolving it on their behalf buries the exchange. This holds even when the reply is a definitive rejection. See "PR Review Conventions" in the global `~/.claude/CLAUDE.md` (`config/CLAUDE.md` in the `claude-workflows` repo).
+
+For our own threads, timing depends on how the reply was posted:
 
 - **Direct reply** (REST `/pulls/{pull_number}/comments/{id}/replies`): reply is immediately published. Resolve right after posting.
 - **Staged as pending review draft** (via `pr-review-batching`): reply is only visible to the author until the user submits the review. Do NOT resolve until after submission. Resolving before publication leaves other reviewers seeing a resolved thread with no visible rationale (worse than silent dismissal).
 
-There is no technical guard; `resolveReviewThread` succeeds regardless of whether a reply exists or is published. The constraint is purely workflow correctness.
+There is no technical guard: `resolveReviewThread` checks neither who authored the thread nor whether a reply exists or has been published. It can still fail for other reasons, such as insufficient permissions, but nothing in the API enforces the workflow above. The constraint is purely workflow correctness.
 
 Use the GraphQL mutation with the thread's node ID:
 
