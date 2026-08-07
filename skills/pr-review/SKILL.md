@@ -380,12 +380,11 @@ taking any action that changes PR state.
 
 ## Notes
 
-- **Repos you may encounter** include Grafana plugin repos (`grafana-adaptivelogs-app`,
-  `grafana-adaptiveprofiles-app`, `gex-plugins`). These are TypeScript/React frontends with Go
-  backends, using `react-hook-form`, RTK Query / react-query, Grafana plugin SDK conventions, and
-  `gh` CLI for CI.
+- **Repos you may encounter** are often observability-platform plugins: TypeScript/React frontends
+  with Go backends, using `react-hook-form`, RTK Query / react-query, host-platform plugin SDK
+  conventions, and `gh` CLI for CI.
 - **Language-specific defaults**: For TypeScript/React, check prop contract changes and hook
   dependency arrays. For Go, check error wrapping patterns and goroutine safety. For YAML workflows,
   check token scopes and trigger conditions.
-- **Multi-repo PRs**: Grafana plugin PRs often have companion PRs in `profiles-drilldown` or other
-  repos. Look for references in the PR description and flag any unresolved cross-repo dependencies.
+- **Multi-repo PRs**: plugin PRs often have companion PRs in sibling repos. Look for references in
+  the PR description and flag any unresolved cross-repo dependencies.

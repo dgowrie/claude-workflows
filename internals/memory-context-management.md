@@ -51,7 +51,7 @@ They're the only thing Claude sees before deciding to read or skip. Quality here
 | --- | --- |
 | "project context notes" | "React 19 upgrade plan for issue #607, PR #652" |
 | "testing feedback" | "Integration tests must hit real DB, not mocks — prior prod incident" |
-| "CSS findings" | "Grafana Collapse DOM structure and Emotion cx() override strategies for #474" |
+| "CSS findings" | "Collapse component DOM structure and Emotion cx() override strategies for a given issue" |
 
 ### File sizing
 
