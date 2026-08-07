@@ -52,8 +52,9 @@ count past the split threshold costs a whole subagent. See Cost and known weakne
 | `mode` | `peer` (someone else's PR) or `self` (yours) | inferred by comparing `author.login` against `gh api user --jq .login`; confirm if ambiguous |
 | `findings` | An existing candidate set to validate | empty; Phase 1 produces one |
 
-An open PR is required. The phase structure hangs off a pinned PR head SHA, and Phase 1a's bot
-cross-check has nothing to read without one. For pre-PR local work, dispatch `pr-code-reviewer`
+An existing PR is required, open, closed, or merged. The phase structure hangs off a pinned PR head
+SHA, and Phase 1a's bot cross-check has nothing to read without one; neither needs the PR to be
+open, and a merged PR's pin cannot move. For pre-PR local work, dispatch `pr-code-reviewer`
 directly against the branch diff; that is its own documented niche.
 
 When `findings` is supplied (for example `/pr-review` just ran and produced them), always run Phase
@@ -77,8 +78,9 @@ gh pr diff <pr>
   session. Memory of what you intended is not evidence of what you pushed, and it is the main
   authorship-bias failure mode this skill exists to counter.
 - Record the head SHA. Every finding cites `path:line` at that SHA.
-- If HEAD moves before the pass finishes, the pass is invalid. Re-pin and redo Phase 1 against the
-  new SHA rather than reconciling across two trees.
+- If HEAD moves before the pass finishes, the pass is invalid. Re-pin and redo it against the new
+  SHA rather than reconciling across two trees. Before Phase 2 that means restarting at Phase 1;
+  detected later, it means re-running both phases, since the existing verdicts are now stale.
 - Use `dangerouslyDisableSandbox: true` for `gh` (corporate proxy TLS).
 
 ---
@@ -90,9 +92,13 @@ Two independent reads of the same diff. The output is a union, not a consensus.
 ### 1a. Your own skeptical pass
 
 Follow `/pr-review` Steps 3 through 7 (repo context, PR type, focus areas, bot cross-check
-subsections only, verify-before-flagging). **Skip Step 6's reply and resolve subsections**; they
+(analysis only), verify-before-flagging). **Skip Step 6's reply and resolve subsections**; they
 publish, and this skill writes nothing. Bot threads count as candidate findings here, including
 resolved ones; a silent dismissal is a candidate like any other.
+
+Step 3's linter suppression is scoped narrowly here: it applies to formatting the linter already
+enforces, which is genuinely not yours to flag. Anything you judged cosmetic on other grounds goes
+into `dismissed[]`, not away. Nothing else is filtered before the union.
 
 ### 1b. One independent fresh-context reviewer
 
@@ -101,7 +107,9 @@ Dispatch a single `pr-code-reviewer` subagent at the same diff.
 - **Do not pass it your findings.** Anchoring it on your candidates is the whole failure this
   phase is built to avoid. Give it the PR ref, the head SHA, and the instruction to review
   independently.
-- In `self` mode, do not tell it the diff is yours.
+- In `self` mode, do not tell it the diff is yours. This is a constraint on the prompt you write,
+  not a guarantee of ignorance: the agent's own fetch surfaces `author`. The point is not to
+  foreground it.
 
 ### Union and classify
 
@@ -128,7 +136,8 @@ Re-query `gh pr view <pr> --json headRefOid` first and compare against the pin. 
 dispatch, not after: catching a moved HEAD here saves the subagent, catching it later only saves
 you from presenting.
 
-One `pr-code-reviewer`, batched over the whole union.
+One `pr-code-reviewer`, batched over the whole union. If the union is empty, skip the dispatch and
+report per Phase 3; run the HEAD re-query anyway.
 
 **It must be a new instance.** Spawn a fresh agent; do not continue the Phase 1b agent via
 `SendMessage`. An agent that authored a finding will confirm it, which produces a verdict with no
@@ -139,6 +148,11 @@ memory-resident priors (see Cost and known weaknesses).
 output schema below supersede `pr-code-reviewer`'s own Output Format, and that the job is to
 adjudicate the supplied set, not to run `/pr-review` Steps 1 through 7 and return a fresh review.
 Without that, the agent follows its definition and hands back a second review instead of verdicts.
+The supersession covers **structure only**. The severity vocabulary is retained, since the agent's
+Output Format is where it is defined and the schema below requires a severity back.
+
+Phase 2 cannot blind the refuter to authorship the way Phase 1b does: the finding set itself
+carries it. The `NOT PROVEN` default and the rubber-stamp check below carry that load instead.
 
 Its mandate:
 
@@ -165,15 +179,16 @@ The table above reads against a `kept[]` entry. On a `dismissed[]` entry the sam
 against the dismissal: `SURVIVES` means the dismissal is upheld and it stays dropped, `REFUTED`
 means the underlying claim was disproved outright and it stays dropped for a stronger reason,
 `REINSTATED` means the dismissal broke. `UNDERSTATED` does not apply to `dismissed[]`; a dismissed
-candidate that turns out to be worse than thought is `REINSTATED`. Say which list an entry came
-from in your report, since two of the verdicts produce the same action from opposite reasoning.
+candidate that turns out to be worse than thought is `REINSTATED`.
 
 `UNDERSTATED` and `REINSTATED` are why the pass is worth running. A refuter that only ever returns
 `REFUTED` and `SURVIVES` is being used as a rubber stamp.
 
-Required per-finding output: `{id, verdict, evidence, revised_fix?}`, plus `severity` whenever the
-verdict is `REINSTATED` or `UNDERSTATED`. Both of those actions re-grade a finding, so a contract
-without severity makes them unexecutable.
+Required per-finding output: `{id, list, verdict, evidence, revised_fix?}`, plus `severity`
+whenever the verdict is `REINSTATED` or `UNDERSTATED`. `list` is required because two of the
+verdicts produce the same action from opposite reasoning, so a verdict is unreadable without it.
+Severity is required because both of those verdicts re-grade a finding; use the
+`blocking / should-fix / nit` scale, which is what `pr-code-reviewer` already emits.
 
 ---
 
@@ -190,14 +205,19 @@ directions.
 - A downward severity revision is a legitimate reconciliation of `SURVIVES` plus mitigating refuter
   evidence. It is not the same as `REFUTED`, and it is why the verdict set has no `OVERSTATED`.
 - Label what you are asserting: Verified, Inferred, or Assumed, per `epistemic-honesty`.
+- Re-query `headRefOid` once more before presenting. Staged comments carry line numbers at the
+  pinned SHA, so a HEAD move you never detected puts them on the wrong lines.
 
-Report the pass as a table so the subtraction is visible:
+Report the pass as a table so the subtraction is visible, one row per Phase 1 candidate. A candidate
+with no Phase 2 verdict is **unadjudicated**, not `SURVIVES`: re-dispatch it, or record it as
+unadjudicated and say so. Silent drops are the predicted failure of a batched refuter, so a blank
+cell is a result, not an absence.
 
 | Finding | Phase 1 | Phase 2 | Action |
 | --- | --- | --- | --- |
-| `src/foo.ts:42` off-by-one on the page boundary | kept, warning | UNDERSTATED | Raised to bug, staged |
-| `src/bar.ts:10` unused import | dismissed, cosmetic | REFUTED | Dropped |
-| `src/baz.ts:88` missing null guard | dismissed, cosmetic | REINSTATED | Staged as bug |
+| `src/foo.ts:42` off-by-one on the page boundary | kept, should-fix | UNDERSTATED | Raised to blocking, staged |
+| `src/bar.ts:10` unused import | dismissed, nit | REFUTED | Dropped |
+| `src/baz.ts:88` missing null guard | dismissed, nit | REINSTATED | Staged as should-fix |
 
 State the counts: candidates in, findings out. A pass that subtracts nothing and adds nothing is
 worth reporting as such.
@@ -229,11 +249,12 @@ the round cap and the stopping condition.
 
 ## Cost and known weaknesses
 
-- **Cost is 2 subagents for a pass of up to roughly ten candidates, 3 when Phase 2 splits.** A fix
-  cycle re-pins and repeats the whole pass, so the number multiplies per cycle. Budget accordingly;
-  the no-gate rule is affordable per pass, not per PR.
+- **Cost is `1 + ceil(candidates / 10)` subagents**: one for Phase 1b, plus one Phase 2 dispatch per
+  batch. Two for a small pass, three at twenty candidates. A fix cycle re-pins and repeats the whole
+  pass, so the number multiplies per cycle. Budget accordingly; the no-gate rule is affordable per
+  pass, not per PR.
 - **Batched refuter attention degrades as the finding count grows.** This is the main known weakness.
-  Past roughly ten candidates, split Phase 2 into two dispatches grouped by file or subsystem, and
+  Cap a dispatch at roughly ten candidates and split past that, grouped by file or subsystem, and
   keep a finding and its proposed fix in the same batch. Splitting costs a subagent; say so when you
   do it.
 - **A fresh instance isolates context, not priors.** `pr-code-reviewer` carries user-scoped memory,
