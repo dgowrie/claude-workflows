@@ -15,6 +15,18 @@ skills/        Skill drafts before deploying to ~/.claude/skills/
 agents/        Subagent definitions, symlinked into ~/.claude/agents/
 ```
 
+The repo is mostly prose, so there is no build. The one exception is
+`skills/pr-review-bot-loop/scripts/`, whose detector decides whether a review loop terminates and
+is covered by tests that CI runs on any PR touching `skills/**/*.py`:
+
+```bash
+python3 -m unittest discover -s skills/pr-review-bot-loop/scripts        # offline, what CI runs
+SIGNALS_LIVE=1 python3 -m unittest discover -s skills/pr-review-bot-loop/scripts
+```
+
+The live half asserts against real PRs through the GitHub API, so it needs an authenticated `gh`
+and stays a pre-push check rather than a CI gate.
+
 ## Contents
 
 ### Internals
