@@ -20,6 +20,13 @@ same zero for "clean" and for "never reviewed". Exit 2 keeps them distinct.
 Inline comments fold into exit 1 alongside suppressed ones so that exit 0 is safe
 to read as "terminate". Both need the same loop action; the printout separates
 them.
+
+Known bound: the query reads the newest 50 reviews. Each thread reply posted over
+REST adds an author-authored review artifact, so a PR that accumulated more than
+50 of them after its head review would push that review out of the window and
+report not-applicable. Reaching it takes 50-plus replies with no push in between,
+roughly ten times anything measured, and the loop's round cap bounds the outcome
+to a wrong report rather than a hang.
 """
 import json
 import re
@@ -38,7 +45,7 @@ query($owner:String!, $repo:String!, $number:Int!) {
       }
       reviews(last:50) {
         nodes {
-          author { login }
+          author { __typename login }
           submittedAt
           commit { oid }
           comments { totalCount }
@@ -64,24 +71,41 @@ SUPPRESSED_SUMMARY = re.compile(r"suppress\w*", re.IGNORECASE)
 COUNT_IN_SUMMARY = re.compile(r"\((\d+)\)")
 # Gate on the summary text: "Show a summary per file" is a benign <details> block
 # that coexists with the suppressed block in the same body.
+#
+# The container is drift-hardened for the same reason the label is. Attributes
+# (<details open>) or different casing would otherwise parse as "no suppressed
+# block", which returns CLEAN and terminates the loop on withheld findings. The
+# floor of matching HTML with a regex is a quoted attribute containing ">"; that
+# is not worth chasing, and it fails toward CLEAN, so the count mismatch below is
+# what catches it.
+#
+# Deliberately NOT here: a body-level backstop treating /suppress/i anywhere in
+# the body as triage. Copilot's overview table restates each changed file's
+# description, so on a PR that mentions suppression the phrase appears in a
+# genuinely clean review body. That backstop was measured firing on this repo's
+# own clean rounds, which is a loop with no fixed point: worse than the early
+# termination it would be trying to prevent.
 DETAILS_BLOCK = re.compile(
-    r"<details>\s*<summary>(?P<summary>.*?)</summary>(?P<inner>.*?)</details>",
-    re.DOTALL,
+    r"<details[^>]*>\s*<summary[^>]*>(?P<summary>.*?)</summary>(?P<inner>.*?)</details>",
+    re.DOTALL | re.IGNORECASE,
 )
 # Inside the block each finding is "**path/to/file.ext**" followed by prose.
 FINDING = re.compile(r"\*\*(?P<file>[^*\n]+?)\*\*\s*(?P<text>.*?)(?=\n\s*\*\*|\Z)", re.DOTALL)
 
 
 def parse_suppressed(body):
-    """Return (declared_count, [(file, text), ...], [summary_labels]).
+    """Return (declared_count, [(file, text), ...], [summary_labels], undeclared).
 
-    declared_count is None when a suppressed block exists but declares no
-    parsable count. Callers treat that as triage-required, never as zero;
-    silent-zero is the failure this whole signal exists to prevent.
+    `undeclared` is True when any suppressed block declared no parsable count.
+    It is tracked separately from the running total because summing across
+    blocks would otherwise erase it: an undeclared block followed by one
+    declaring (0) collapses to a count of 0, and silent-zero is the failure this
+    whole signal exists to prevent.
     """
     count = None
     findings = []
     labels = []
+    undeclared = False
     for block in DETAILS_BLOCK.finditer(body):
         summary = block.group("summary")
         if not SUPPRESSED_SUMMARY.search(summary):
@@ -90,11 +114,13 @@ def parse_suppressed(body):
         match = COUNT_IN_SUMMARY.search(summary)
         if match:
             count = (count or 0) + int(match.group(1))
+        else:
+            undeclared = True
         for finding in FINDING.finditer(block.group("inner")):
             text = " ".join(finding.group("text").split())
             if text:
                 findings.append((finding.group("file").strip(), text))
-    return count, findings, labels
+    return count, findings, labels, undeclared
 
 
 def fetch(owner, repo, number):
@@ -144,21 +170,38 @@ def main():
     for review in pr["reviews"]["nodes"]:
         # Our own `:zap:` thread replies create author-authored COMMENTED review
         # artifacts with empty bodies. Only Copilot's reviews are verdicts.
-        if not COPILOT.search(review["author"]["login"] if review["author"] else ""):
+        #
+        # Two independent conditions. Requiring __typename Bot excludes a human
+        # collaborator whose login happens to contain "copilot", and the login
+        # match stays a loose substring on purpose: the bot's login differs
+        # across API surfaces, and anchoring it would trade a false positive
+        # that needs a hostile-named collaborator for a false negative on any
+        # future surface, which presents as a review that never lands.
+        author = review["author"] or {}
+        if author.get("__typename") != "Bot":
+            continue
+        if not COPILOT.search(author.get("login") or ""):
             continue
         oid = (review["commit"] or {}).get("oid")
-        count, findings, labels = parse_suppressed(review["body"] or "")
+        count, findings, labels, undeclared = parse_suppressed(review["body"] or "")
         inline = review["comments"]["totalCount"]
         where = "AT HEAD" if oid == head else f"at {oid[:7] if oid else 'unknown'}"
         if not labels:
             shown = "none"
+        elif undeclared and count is None:
+            shown = f"UNDECLARED via {labels}"
+        elif undeclared:
+            shown = f"{count} declared plus an undeclared block via {labels}"
         else:
-            shown = f"{count if count is not None else 'UNDECLARED'} via {labels}"
+            shown = f"{count} via {labels}"
         print(f"\n=== review {review['submittedAt']} {where} "
               f"inline={inline} suppressed={shown}")
         for path, text in findings:
             print(f"  - {path}: {text[:300]}")
-        if count is not None and len(findings) != count:
+        # Only meaningful when every block declared a count; with a mixed body
+        # `count` sums the declared blocks while `findings` spans all of them,
+        # so the comparison would warn spuriously.
+        if not undeclared and count is not None and len(findings) != count:
             print(f"  WARNING: declared {count}, parsed {len(findings)}; "
                   f"read the review body directly")
         # A head can carry more than one review (re-requested without pushing), and
@@ -166,7 +209,7 @@ def main():
         # not a contract. Decide on the most recently submitted one explicitly.
         submitted = review["submittedAt"] or ""
         if oid == head and submitted >= at_head_submitted:
-            at_head = (inline, count, labels, len(findings))
+            at_head = (inline, count, labels, len(findings), undeclared)
             at_head_submitted = submitted
 
     # Only the review at head decides the loop. A historical review's suppressed
@@ -178,21 +221,21 @@ def main():
               "re-review on push, so this is silent abandonment, not clean. "
               "Re-request, or wait if one is already pending.")
         return NOT_APPLICABLE
-    inline, count, labels, parsed = at_head
+    inline, count, labels, parsed, undeclared = at_head
     if not labels:
         withheld = "no suppressed block"
-    elif count is None:
+    elif undeclared:
         withheld = "a suppressed block declaring no parsable count"
     elif parsed != count:
         withheld = f"a suppressed block declaring {count} but carrying {parsed}"
     else:
         withheld = f"{count} suppressed"
-    # Parsed findings decide alongside the declared count, never under it. A block
-    # that declares (0) while carrying findings is a silent zero, which is the
-    # failure this signal exists to prevent, and it is the assertive kind: the
-    # count mismatch means the body format moved and the parse is no longer
-    # trustworthy in either direction.
-    if inline or parsed or (labels and (count is None or count > 0)):
+    # Parsed findings and an undeclared count each decide alongside the declared
+    # total, never under it. A block that declares (0) while carrying findings is
+    # a silent zero, which is the failure this signal exists to prevent, and it is
+    # the assertive kind: the mismatch means the body format moved and the parse
+    # is no longer trustworthy in either direction.
+    if inline or parsed or undeclared or (labels and (count is None or count > 0)):
         print(f"\nTRIAGE REQUIRED: {inline} inline, {withheld}.")
         return TRIAGE_REQUIRED
     print("\nCLEAN: a review at head posted nothing and withheld nothing.")

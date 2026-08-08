@@ -16,11 +16,15 @@ transition rather than at a single point.
 import contextlib
 import importlib.util
 import io
+import json
 import os
 import subprocess
 import sys
+import tempfile
+import textwrap
 import unittest
 from pathlib import Path
+from unittest import mock
 
 SCRIPT = Path(__file__).with_name("copilot-signals.py")
 
@@ -57,10 +61,21 @@ BENIGN = "<details><summary>Show a summary per file</summary>\n**src/a.py** fine
 
 
 def review(oid, inline=0, body="", when="2026-01-01T00:00:00Z",
-           login="copilot-pull-request-reviewer"):
-    return {"author": {"login": login}, "submittedAt": when,
-            "commit": {"oid": oid}, "comments": {"totalCount": inline},
-            "body": body}
+           login="copilot-pull-request-reviewer", typename="Bot"):
+    return {"author": {"__typename": typename, "login": login},
+            "submittedAt": when, "commit": {"oid": oid},
+            "comments": {"totalCount": inline}, "body": body}
+
+
+def payload(reviews, head=HEAD, pending=()):
+    return {
+        "headRefOid": head,
+        "reviewRequests": {"nodes": [
+            {"requestedReviewer": {"__typename": "Bot", "login": login}}
+            for login in pending
+        ]},
+        "reviews": {"nodes": reviews},
+    }
 
 
 class ClassificationTests(unittest.TestCase):
@@ -74,14 +89,18 @@ class ClassificationTests(unittest.TestCase):
         finally:
             sys.argv = argv
 
-    def assertVerdict(self, reviews, expected, head=HEAD):
-        signals.fetch = lambda owner, repo, number: {
-            "headRefOid": head,
-            "reviewRequests": {"nodes": []},
-            "reviews": {"nodes": reviews},
-        }
-        with contextlib.redirect_stdout(io.StringIO()):
-            self.assertEqual(self._run(), expected)
+    def verdict(self, reviews, head=HEAD, pending=()):
+        """Return (exit status, stdout). Patch is scoped, never left behind."""
+        out = io.StringIO()
+        with mock.patch.object(signals, "fetch",
+                               lambda owner, repo, number: payload(reviews, head, pending)):
+            with contextlib.redirect_stdout(out):
+                code = self._run()
+        return code, out.getvalue()
+
+    def assertVerdict(self, reviews, expected, head=HEAD, pending=()):
+        code, _ = self.verdict(reviews, head, pending)
+        self.assertEqual(code, expected)
 
     def test_no_review_at_head_is_not_applicable(self):
         """The silent-abandonment trap. Never read this as clean."""
@@ -142,38 +161,172 @@ class ClassificationTests(unittest.TestCase):
              review(HEAD, body=SUPPRESSED_TWO, when="2026-01-02T00:00:00Z")],
             signals.TRIAGE_REQUIRED)
 
+    def test_container_attributes_do_not_hide_a_suppressed_block(self):
+        """<details open> parsed as no block, which returned CLEAN on findings."""
+        for markup in (
+            '<details open><summary>Suppressed comments (1)</summary>\n'
+            '**src/a.py** x\n</details>',
+            '<details><summary class="y">Suppressed comments (1)</summary>\n'
+            '**src/a.py** x\n</details>',
+            '<DETAILS><SUMMARY>Suppressed comments (1)</SUMMARY>\n'
+            '**src/a.py** x\n</DETAILS>',
+        ):
+            with self.subTest(markup=markup[:32]):
+                self.assertVerdict([review(HEAD, body=markup)],
+                                   signals.TRIAGE_REQUIRED)
+
+    def test_clean_body_mentioning_suppression_stays_clean(self):
+        """Copilot's overview table restates file descriptions.
+
+        A body-level /suppress/ backstop was measured firing on this repo's own
+        clean rounds, which is a loop with no fixed point.
+        """
+        body = ("## Pull request overview\n\n| File | Description |\n"
+                "| --- | --- |\n| signals.py | detects suppressed findings |\n")
+        self.assertVerdict([review(HEAD, body=body)], signals.CLEAN)
+
+    def test_undeclared_block_survives_a_later_declared_zero(self):
+        self.assertVerdict(
+            [review(HEAD, body=SUPPRESSED_UNDECLARED + "\n" + SUPPRESSED_EMPTY)],
+            signals.TRIAGE_REQUIRED)
+
+    def test_human_login_containing_copilot_is_not_a_verdict(self):
+        """__typename excludes the human; the login match stays deliberately loose."""
+        self.assertVerdict(
+            [review(HEAD, login="copilotfan", typename="User")],
+            signals.NOT_APPLICABLE)
+
     def test_historical_suppressed_block_does_not_keep_the_loop_dirty(self):
         """Head-scoping. Without it an already-fixed round never reaches clean."""
         self.assertVerdict(
             [review(OLD, body=SUPPRESSED_TWO), review(HEAD)], signals.CLEAN)
 
 
+class ReportTests(unittest.TestCase):
+    """The printed report is the other half of the interface.
+
+    The exit status cannot express `pending`, and the loop's re-request gate
+    reads it, so both branches need cover. Left untested it is the signal whose
+    failure mode is a watcher that waits through a landed review.
+    """
+
+    def report(self, reviews, head=HEAD, pending=()):
+        return ClassificationTests.verdict(self, reviews, head, pending)[1]
+
+    _run = ClassificationTests._run
+
+    def test_reports_no_pending_request(self):
+        self.assertIn("pending none", self.report([review(HEAD)]))
+
+    def test_reports_a_pending_request(self):
+        out = self.report([review(HEAD)], pending=["copilot-pull-request-reviewer"])
+        self.assertIn("copilot-pull-request-reviewer", out.splitlines()[1])
+
+    def test_non_copilot_requested_reviewer_is_not_reported_as_pending(self):
+        self.assertIn("pending none",
+                      self.report([review(HEAD)], pending=["some-human"]))
+
+    def test_reports_head_and_each_review(self):
+        out = self.report([review(OLD), review(HEAD, inline=2)])
+        self.assertIn(f"head {HEAD}", out)
+        self.assertIn("AT HEAD", out)
+        self.assertEqual(out.count("=== review"), 2)
+
+    def test_warns_when_declared_and_parsed_counts_disagree(self):
+        self.assertIn("WARNING", self.report(
+            [review(HEAD, body=SUPPRESSED_ZERO_WITH_FINDINGS)]))
+
+    def test_no_spurious_warning_when_a_block_is_undeclared(self):
+        """count sums declared blocks while findings span all of them."""
+        self.assertNotIn("WARNING", self.report(
+            [review(HEAD, body=SUPPRESSED_UNDECLARED + "\n" + SUPPRESSED_EMPTY)]))
+
+
+class ErrorPathTests(unittest.TestCase):
+    """Every failure must land on ERROR rather than on a verdict.
+
+    These run the script as a subprocess with a stubbed `gh` so they stay
+    offline, which is what lets CI cover the top-level handler.
+    """
+
+    def run_with_gh(self, stdout="", returncode=0, stderr=""):
+        with tempfile.TemporaryDirectory() as tmp:
+            stub = Path(tmp) / "gh"
+            stub.write_text(textwrap.dedent(f"""\
+                #!/bin/sh
+                cat <<'STUB_EOF'
+                {stdout}
+                STUB_EOF
+                printf '%s' {json.dumps(stderr)} >&2
+                exit {returncode}
+                """))
+            stub.chmod(0o755)
+            env = dict(os.environ)
+            # Prepend. Replacing PATH would break the stub's own `cat`, and every
+            # case would still exit 3 while asserting nothing.
+            env["PATH"] = tmp + os.pathsep + env["PATH"]
+            return subprocess.run(
+                [sys.executable, str(SCRIPT), "owner", "repo", "1"],
+                capture_output=True, text=True, env=env)
+
+    def assertNoVerdict(self, result):
+        self.assertEqual(result.returncode, signals.ERROR)
+        self.assertIn("ERROR", result.stderr)
+
+    def test_gh_failure_is_error(self):
+        self.assertNoVerdict(self.run_with_gh(returncode=1, stderr="gh: auth required"))
+
+    def test_graphql_errors_payload_is_error(self):
+        self.assertNoVerdict(self.run_with_gh(stdout=json.dumps(
+            {"data": None, "errors": [{"message": "Could not resolve to a Repository"}]})))
+
+    def test_malformed_json_is_error(self):
+        self.assertNoVerdict(self.run_with_gh(stdout="not json at all"))
+
+    def test_null_repository_is_error(self):
+        self.assertNoVerdict(self.run_with_gh(stdout=json.dumps(
+            {"data": {"repository": None}})))
+
+    def test_null_pull_request_is_error(self):
+        result = self.run_with_gh(stdout=json.dumps(
+            {"data": {"repository": {"pullRequest": None}}}))
+        self.assertNoVerdict(result)
+        self.assertIn("no pull request 1", result.stderr)
+
+    def test_stub_reaches_a_real_verdict_on_a_well_formed_payload(self):
+        """Guards the stub itself: without this the cases above could pass vacuously."""
+        result = self.run_with_gh(stdout=json.dumps(
+            {"data": {"repository": {"pullRequest": payload([review(HEAD)])}}}))
+        self.assertEqual(result.returncode, signals.CLEAN)
+        self.assertIn("CLEAN", result.stdout)
+
+
 class ParserTests(unittest.TestCase):
     def test_matches_both_observed_labels(self):
         for body, expected in ((SUPPRESSED_TWO, 2), (OLD_LABEL, 3)):
             with self.subTest(body=body[:40]):
-                count, _, labels = signals.parse_suppressed(body)
+                count, _, labels, _ = signals.parse_suppressed(body)
                 self.assertEqual(count, expected)
                 self.assertTrue(labels)
 
     def test_ignores_benign_details_block(self):
-        count, findings, labels = signals.parse_suppressed(BENIGN)
+        count, findings, labels, _ = signals.parse_suppressed(BENIGN)
         self.assertIsNone(count)
         self.assertEqual(findings, [])
         self.assertEqual(labels, [])
 
     def test_unparsable_count_is_none_not_zero(self):
-        count, findings, labels = signals.parse_suppressed(SUPPRESSED_UNDECLARED)
+        count, findings, labels, _ = signals.parse_suppressed(SUPPRESSED_UNDECLARED)
         self.assertIsNone(count)
         self.assertTrue(labels)
         self.assertEqual(len(findings), 1)
 
     def test_extracts_file_and_text_per_finding(self):
-        _, findings, _ = signals.parse_suppressed(SUPPRESSED_TWO)
+        _, findings, _, _ = signals.parse_suppressed(SUPPRESSED_TWO)
         self.assertEqual([path for path, _ in findings], ["src/a.py", "src/b.py"])
 
     def test_suppressed_and_benign_blocks_coexist(self):
-        count, findings, _ = signals.parse_suppressed(BENIGN + "\n" + SUPPRESSED_TWO)
+        count, findings, _, _ = signals.parse_suppressed(BENIGN + "\n" + SUPPRESSED_TWO)
         self.assertEqual(count, 2)
         self.assertEqual(len(findings), 2)
 

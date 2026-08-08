@@ -83,8 +83,12 @@ all measured, and guessing the equivalents for another bot reproduces none of th
 `landed?` and `suppressed?` ship as a script, since between them they carry every measured trap:
 
 ```bash
-skills/pr-review-bot-loop/scripts/copilot-signals.py <owner> <repo> <pr-number>
+~/.claude/skills/pr-review-bot-loop/scripts/copilot-signals.py <owner> <repo> <pr-number>
 ```
+
+That is the installed path, and it is the one to use: the loop runs from the target project's
+working directory, which is usually not this repo. The repo-relative paths further down are
+deliberate, and they apply only when you are editing the detector itself.
 
 Exit `0` clean, `1` triage-required, `2` not-applicable, `3` error. It prints the pending request,
 every Copilot review with its commit, inline count, and suppressed findings. Exit `3` is a signal
@@ -139,7 +143,7 @@ It is three-state. Collapsing it to a boolean is a bug in opposite directions.
 | State | Condition | Loop action |
 | --- | --- | --- |
 | clean | review at head, nothing posted and nothing suppressed | terminate |
-| triage-required | review at head, suppressed count non-zero or unparsable | read the block, triage, fix, push, re-request |
+| triage-required | review at head, and any of: inline comments non-zero, suppressed count non-zero or unparsable, or parsed findings disagreeing with a declared count | triage whatever it reported, posted or withheld, then fix, push, re-request |
 | not-applicable | no review at head | re-request, or wait if one is pending |
 
 - **Scope the check to the review at `headRefOid`.** A detector that scans every review on the PR
@@ -182,10 +186,18 @@ Each round:
 
 1. **Read the signals.** Run `copilot-signals.py` and branch on its exit status: `0` go to
    Termination, `1` triage, `2` re-request or wait, `3` fix the query and re-run.
-2. **Re-request only when both hold**: a new commit is at head, and nothing is pending against it.
-   A request already in flight means wait, not re-request.
-3. **Wait** with `ScheduleWakeup` at `poll`. Poll the signals again; do not conclude anything from
-   the wait itself.
+
+   On `1`, triage only the findings at this head that are **not already dispositioned**. If every
+   one of them is, go to Termination. Exit `1` is computed from what the review says, not from what
+   you did about it, so declining a finding leaves it at `1` forever; without this clause the loop
+   re-triages the same findings until `max_rounds`.
+2. **Re-request when no review exists at head and nothing is pending against it.** A request already
+   in flight means wait, not re-request; that gate is what keeps you off the double-request trap.
+   Head-scoping already encodes "the current commit is unreviewed", so there is no separate
+   new-commit condition to check, and the entry case of a PR the bot has never seen qualifies.
+3. **Wait** before polling again. Under `/loop` dynamic mode, use `ScheduleWakeup` at `poll`.
+   Otherwise run the poll as a background shell command; foreground `sleep` is blocked in this
+   harness. Conclude nothing from the wait itself.
 4. **Triage every finding, posted and suppressed together.** Route them through
    `/pr-review-adversarial` Phase 2 rather than acting on them directly. Low-confidence items are
    exactly where a refuter earns its cost: of 7 suppressed issues on the measured PR, 2 rested on
@@ -197,7 +209,11 @@ Each round:
 7. **Reply to the threads** you acted on, then loop.
 
 A push moves head, which makes the next signal read `not-applicable` and sends you to step 2. The
-detector drives the loop; you do not track round state separately.
+detector drives the loop; you do not track round state separately. The one thing it cannot tell you
+is whether you already dispositioned a finding, so record that where the detector's own inputs live:
+a published `:zap:` or `:thought_balloon:` reply on the thread, and for a suppressed finding, which
+has no thread, the commit message that fixed it or a PR comment declining it. Disposition then lives
+on the PR rather than in session memory, and a fresh session picks the loop up mid-flight.
 
 ### Thread hygiene
 
