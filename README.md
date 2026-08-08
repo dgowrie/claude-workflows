@@ -45,6 +45,7 @@ Changes to a skill file in the repo are immediately live — no copy or sync ste
 - [`/pr-review`](skills/pr-review/SKILL.md) — AI-assisted GitHub PR review with line-level draft comments
 - [`/pr-review-batching`](skills/pr-review-batching/SKILL.md) - stage PR review comments as drafts on a pending review (never publishes); owns ensure-then-append and accidental-publish incident response
 - [`/pr-review-adversarial`](skills/pr-review-adversarial/SKILL.md) - two-phase adversarial validation of review findings: an independent fresh-context reviewer attacks the code, then a second reviewer attacks every finding, fix, and dismissal with a default-to-NOT-PROVEN mandate
+- [`/pr-review-bot-loop`](skills/pr-review-bot-loop/SKILL.md) - drive your own PR to a clean automated-reviewer pass before human review: a five-signal Copilot adapter (re-request / pending? / landed? / clean? / suppressed?) whose `suppressed?` signal catches the real findings Copilot hides in the review body. Ships with `scripts/copilot-signals.py`
 - [`/memory-audit`](skills/memory-audit/SKILL.md) — reflective review, consolidation, and pruning of memory files; defaults to current project, offers a cross-project sweep for promotion candidates
 - [`/branch-cleanup`](skills/branch-cleanup/SKILL.md) — interactive local branch cleanup with PR cross-referencing
 - [`/grill-me`](skills/grill-me/SKILL.md) — stress-test a plan or design through relentless interrogation
