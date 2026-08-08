@@ -165,6 +165,15 @@ known, never by review, and each surfaced only after the previous one was fixed.
 cannot find them: the head-scoping trap appears only once a fix has landed. A detector validated
 only against a clean PR is untested.
 
+That discipline is encoded in `scripts/test_copilot_signals.py`, which pairs synthetic cases for the
+states no real PR reaches with known-answer cases against merged PRs whose state can no longer
+drift. Run it after any change to the detector:
+
+```bash
+python3 -m unittest discover -s skills/pr-review-bot-loop/scripts        # offline
+SIGNALS_LIVE=1 python3 -m unittest discover -s skills/pr-review-bot-loop/scripts
+```
+
 ---
 
 ## The loop

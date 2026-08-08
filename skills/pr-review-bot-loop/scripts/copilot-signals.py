@@ -166,7 +166,7 @@ def main():
         # not a contract. Decide on the most recently submitted one explicitly.
         submitted = review["submittedAt"] or ""
         if oid == head and submitted >= at_head_submitted:
-            at_head = (inline, count, labels)
+            at_head = (inline, count, labels, len(findings))
             at_head_submitted = submitted
 
     # Only the review at head decides the loop. A historical review's suppressed
@@ -178,14 +178,21 @@ def main():
               "re-review on push, so this is silent abandonment, not clean. "
               "Re-request, or wait if one is already pending.")
         return NOT_APPLICABLE
-    inline, count, labels = at_head
+    inline, count, labels, parsed = at_head
     if not labels:
         withheld = "no suppressed block"
     elif count is None:
         withheld = "a suppressed block declaring no parsable count"
+    elif parsed != count:
+        withheld = f"a suppressed block declaring {count} but carrying {parsed}"
     else:
         withheld = f"{count} suppressed"
-    if inline or (labels and (count is None or count > 0)):
+    # Parsed findings decide alongside the declared count, never under it. A block
+    # that declares (0) while carrying findings is a silent zero, which is the
+    # failure this signal exists to prevent, and it is the assertive kind: the
+    # count mismatch means the body format moved and the parse is no longer
+    # trustworthy in either direction.
+    if inline or parsed or (labels and (count is None or count > 0)):
         print(f"\nTRIAGE REQUIRED: {inline} inline, {withheld}.")
         return TRIAGE_REQUIRED
     print("\nCLEAN: a review at head posted nothing and withheld nothing.")
