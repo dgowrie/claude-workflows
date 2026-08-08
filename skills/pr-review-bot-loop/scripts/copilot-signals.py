@@ -116,7 +116,14 @@ def main():
         print(__doc__.strip(), file=sys.stderr)
         return ERROR
     try:
-        pr = fetch(sys.argv[1], sys.argv[2], sys.argv[3])
+        # The query declares number as Int!, so coerce here rather than letting a
+        # bad argument surface as a GraphQL type error from two layers down.
+        number = int(sys.argv[3])
+    except ValueError:
+        print(f"ERROR: pr-number must be an integer, got {sys.argv[3]!r}", file=sys.stderr)
+        return ERROR
+    try:
+        pr = fetch(sys.argv[1], sys.argv[2], number)
     except Exception as error:  # noqa: BLE001 - any failure means "no verdict"
         print(f"ERROR: {error}", file=sys.stderr)
         return ERROR
@@ -135,6 +142,7 @@ def main():
     print(f"pending {pending if pending else 'none'}")
 
     at_head = None
+    at_head_submitted = ""
     for review in pr["reviews"]["nodes"]:
         # Our own `:zap:` thread replies create author-authored COMMENTED review
         # artifacts with empty bodies. Only Copilot's reviews are verdicts.
@@ -155,8 +163,13 @@ def main():
         if count is not None and len(findings) != count:
             print(f"  WARNING: declared {count}, parsed {len(findings)}; "
                   f"read the review body directly")
-        if oid == head:
+        # A head can carry more than one review (re-requested without pushing), and
+        # PullRequest.reviews takes no orderBy argument, so the connection's order is
+        # not a contract. Decide on the most recently submitted one explicitly.
+        submitted = review["submittedAt"] or ""
+        if oid == head and submitted >= at_head_submitted:
             at_head = (inline, count, labels)
+            at_head_submitted = submitted
 
     # Only the review at head decides the loop. A historical review's suppressed
     # block was already triaged and fixed, but it stays in the PR forever, so a
@@ -168,9 +181,14 @@ def main():
               "Re-request, or wait if one is already pending.")
         return NOT_APPLICABLE
     inline, count, labels = at_head
+    if not labels:
+        withheld = "no suppressed block"
+    elif count is None:
+        withheld = "a suppressed block declaring no parsable count"
+    else:
+        withheld = f"{count} suppressed"
     if inline or (labels and (count is None or count > 0)):
-        print(f"\nTRIAGE REQUIRED: {inline} inline, "
-              f"{count if count is not None else 'an undeclared number of'} suppressed.")
+        print(f"\nTRIAGE REQUIRED: {inline} inline, {withheld}.")
         return TRIAGE_REQUIRED
     print("\nCLEAN: a review at head posted nothing and withheld nothing.")
     return CLEAN
