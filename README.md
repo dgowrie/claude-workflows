@@ -118,4 +118,4 @@ Subagent definitions in `agents/` are symlinked into `~/.claude/agents/`, making
 
 ### Skills
 
-- **Evaluate replacing `/pr-review` with Cowork's `/review`** — our custom skill had a repo-resolution bug (given a grafana-adaptivelogs-app PR, it cloned and worked in adaptivetraces-app, took many turns to self-correct). Cowork's built-in `/review` may handle repo context better. However, the two skills surfaced different feedback, so the right move is likely to consolidate the best of both rather than a straight swap.
+- **Evaluate replacing `/pr-review` with Cowork's `/review`** — our custom skill had a repo-resolution bug (given a PR in one repo, it cloned and worked in a similarly-named sibling repo, took many turns to self-correct). Cowork's built-in `/review` may handle repo context better. However, the two skills surfaced different feedback, so the right move is likely to consolidate the best of both rather than a straight swap.
