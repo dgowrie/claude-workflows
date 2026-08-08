@@ -192,9 +192,8 @@ detector drives the loop; you do not track round state separately.
 
 ### Thread hygiene
 
-Follow the global PR Review Conventions: `:zap: <commit hash>` on accepted, `:thought_balloon:
-<rationale>` on declined. Replies need the **numeric** comment id, not the GraphQL node id, which
-404s: `POST /pulls/{n}/comments/{numericId}/replies`.
+Reply in the format the global PR Review Conventions define. Replies need the **numeric** comment
+id, not the GraphQL node id, which 404s: `POST /pulls/{n}/comments/{numericId}/replies`.
 
 **Leave every bot thread open.** An open thread keeps the finding and your response visible for the
 human reviewer who comes next. This is the one action the loop must never take, and it is called out
@@ -272,6 +271,8 @@ head.
 ## Notes
 
 - Global conventions (PR Review Conventions, TDD, Definition of Done, commit and dash rules) live in
-  the global `CLAUDE.md` and `~/.claude/rules/`. This skill obeys them and does not restate them.
+  the global `CLAUDE.md` and `~/.claude/rules/`. This skill obeys them and points at them rather
+  than copying them. The one repetition it does carry is deliberate: leaving bot threads open is
+  restated here because driving toward "clean" is exactly the context that tempts you past it.
 - Related: `/pr-review` (find and format), `/pr-review-adversarial` (validate findings),
   `/pr-review-batching` (stage, never publish).

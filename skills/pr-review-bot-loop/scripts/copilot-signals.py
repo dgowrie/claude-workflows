@@ -122,11 +122,9 @@ def main():
     except ValueError:
         print(f"ERROR: pr-number must be an integer, got {sys.argv[3]!r}", file=sys.stderr)
         return ERROR
-    try:
-        pr = fetch(sys.argv[1], sys.argv[2], number)
-    except Exception as error:  # noqa: BLE001 - any failure means "no verdict"
-        print(f"ERROR: {error}", file=sys.stderr)
-        return ERROR
+    pr = fetch(sys.argv[1], sys.argv[2], number)
+    if pr is None:
+        raise RuntimeError(f"no pull request {number} in {sys.argv[1]}/{sys.argv[2]}")
 
     head = pr["headRefOid"]
     print(f"head {head}")
@@ -195,4 +193,11 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    # Every unexpected failure has to land on ERROR. An uncaught exception would
+    # exit 1, which is TRIAGE_REQUIRED, so a crash would read to the loop as a
+    # verdict. Reporting no verdict is the one thing this script must get right.
+    try:
+        sys.exit(main())
+    except Exception as error:  # noqa: BLE001
+        print(f"ERROR: {error}", file=sys.stderr)
+        sys.exit(ERROR)
