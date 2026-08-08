@@ -158,10 +158,13 @@ def main():
     # GraphQL is the only surface that shows a pending Copilot request. Both
     # `gh pr view --json reviewRequests` and REST /requested_reviewers return
     # empty while one is outstanding, so an adapter reading either double-requests.
+    # Same two conditions as the review filter below. A human collaborator whose
+    # login contains "copilot" would otherwise read as a pending bot request,
+    # which parks the loop in wait instead of re-requesting.
     pending = [
-        (node["requestedReviewer"] or {}).get("login", "?")
-        for node in pr["reviewRequests"]["nodes"]
-        if COPILOT.search((node["requestedReviewer"] or {}).get("login", ""))
+        reviewer["login"]
+        for reviewer in (node["requestedReviewer"] or {} for node in pr["reviewRequests"]["nodes"])
+        if reviewer.get("__typename") == "Bot" and COPILOT.search(reviewer.get("login") or "")
     ]
     print(f"pending {pending if pending else 'none'}")
 

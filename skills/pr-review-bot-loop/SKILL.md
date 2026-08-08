@@ -185,7 +185,14 @@ SIGNALS_LIVE=1 python3 -m unittest discover -s skills/pr-review-bot-loop/scripts
 Each round:
 
 1. **Read the signals.** Run `copilot-signals.py` and branch on its exit status: `0` go to
-   Termination, `1` triage, `2` re-request or wait, `3` fix the query and re-run.
+   Termination, `1` triage, `2` re-request or wait, `3` no verdict.
+
+   Exit `3` covers two different things and they need different responses. A transient failure (TLS
+   handshake timeout, rate limit, a 5xx) is retried on the next poll and costs nothing; observed
+   once against a corporate proxy during a live run. A structural one (a bad argument, a moved
+   schema, a repo you cannot read) repeats every poll, so treat a `3` that survives two consecutive
+   polls as a defect to fix rather than as weather. Either way it is not a verdict, so never
+   substitute one of the other three for it.
 
    On `1`, triage only the findings at this head that are **not already dispositioned**. If every
    one of them is, go to Termination. Exit `1` is computed from what the review says, not from what

@@ -68,12 +68,14 @@ def review(oid, inline=0, body="", when="2026-01-01T00:00:00Z",
 
 
 def payload(reviews, head=HEAD, pending=()):
+    """`pending` takes logins, or (login, __typename) pairs to vary the type."""
+    nodes = []
+    for entry in pending:
+        login, typename = entry if isinstance(entry, tuple) else (entry, "Bot")
+        nodes.append({"requestedReviewer": {"__typename": typename, "login": login}})
     return {
         "headRefOid": head,
-        "reviewRequests": {"nodes": [
-            {"requestedReviewer": {"__typename": "Bot", "login": login}}
-            for login in pending
-        ]},
+        "reviewRequests": {"nodes": nodes},
         "reviews": {"nodes": reviews},
     }
 
@@ -225,6 +227,21 @@ class ReportTests(unittest.TestCase):
     def test_non_copilot_requested_reviewer_is_not_reported_as_pending(self):
         self.assertIn("pending none",
                       self.report([review(HEAD)], pending=["some-human"]))
+
+    def test_human_reviewer_named_like_the_bot_is_not_reported_as_pending(self):
+        """Login alone is not enough; a User reading as pending parks the loop.
+
+        Requesting a human whose login contains "copilot" would otherwise send
+        step 2 into wait instead of re-requesting, with nothing ever landing.
+        """
+        self.assertIn("pending none",
+                      self.report([review(HEAD)], pending=[("copilotfan", "User")]))
+
+    def test_bot_request_is_still_reported_when_a_human_lookalike_coexists(self):
+        out = self.report([review(HEAD)], pending=[
+            ("copilotfan", "User"), ("copilot-pull-request-reviewer", "Bot")])
+        self.assertIn("copilot-pull-request-reviewer", out)
+        self.assertNotIn("copilotfan", out)
 
     def test_reports_head_and_each_review(self):
         out = self.report([review(OLD), review(HEAD, inline=2)])
