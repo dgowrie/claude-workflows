@@ -301,8 +301,11 @@ class ErrorPathTests(unittest.TestCase):
         self.assertNoVerdict(self.run_with_gh(stdout="not json at all"))
 
     def test_null_repository_is_error(self):
-        self.assertNoVerdict(self.run_with_gh(stdout=json.dumps(
-            {"data": {"repository": None}})))
+        result = self.run_with_gh(stdout=json.dumps({"data": {"repository": None}}))
+        self.assertNoVerdict(result)
+        # The exit status was always right; the message was "'NoneType' object is
+        # not subscriptable", which tells the reader nothing about what to fix.
+        self.assertIn("no such repository, or no access", result.stderr)
 
     def test_null_pull_request_is_error(self):
         result = self.run_with_gh(stdout=json.dumps(

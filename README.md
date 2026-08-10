@@ -15,9 +15,9 @@ skills/        Skill drafts before deploying to ~/.claude/skills/
 agents/        Subagent definitions, symlinked into ~/.claude/agents/
 ```
 
-The repo is mostly prose, so there is no build. The one exception is
-`skills/pr-review-bot-loop/scripts/`, whose detector decides whether a review loop terminates and
-is covered by tests that CI runs on any PR touching that directory:
+The repo is mostly prose and has no build. It does carry some executable logic: the hook scripts in
+`config/hooks/`, `skills/work-next-task/scripts/ralph.sh`, and the bot-loop detector. Only the
+detector has automated tests, and CI runs them on any PR touching its directory:
 
 ```bash
 python3 -m unittest discover -s skills/pr-review-bot-loop/scripts        # offline, what CI runs

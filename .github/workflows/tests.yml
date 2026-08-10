@@ -1,8 +1,9 @@
 name: tests
 
-# The repo is mostly prose. This runs the one thing in it that is executable
-# logic: the pr-review-bot-loop detector, whose exit codes decide whether a
-# review loop terminates.
+# Runs the pr-review-bot-loop detector's tests, whose exit codes decide whether
+# a review loop terminates. Other executable logic in the repo is not covered
+# here: config/hooks/ has its own test script (block-em-dash.test.sh) that
+# nothing runs automatically, and work-next-task/scripts/ralph.sh has no tests.
 
 on:
   pull_request:

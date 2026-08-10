@@ -134,7 +134,14 @@ def fetch(owner, repo, number):
     payload = json.loads(result.stdout)
     if payload.get("errors"):
         raise RuntimeError(json.dumps(payload["errors"]))
-    return payload["data"]["repository"]["pullRequest"]
+    repository = (payload.get("data") or {}).get("repository")
+    if repository is None:
+        # GitHub returns NOT_FOUND in `errors` for a missing or unreadable repo,
+        # so this is caught above in practice. The guard exists because the exit
+        # status is the interface: without it the message is a bare "'NoneType'
+        # object is not subscriptable", which says nothing about what to fix.
+        raise RuntimeError(f"cannot read {owner}/{repo}: no such repository, or no access")
+    return repository["pullRequest"]
 
 
 def main():
