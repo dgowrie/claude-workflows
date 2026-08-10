@@ -63,7 +63,7 @@ A practical guide to how Claude Code manages state, memory, and context across s
 | **Scoping** | Project-directory-scoped. Global lessons need CLAUDE.md, not memory |
 | **Staleness** | No expiry or auto-cleanup. Shipped project memories become dead weight |
 | **Conflicts** | A memory can contradict CLAUDE.md or another memory. No resolution mechanism |
-| **Truncation** | MEMORY.md index is capped at both 200 lines and 25KB; the byte cap usually binds first ([detail](memory-context-management.md)) |
+| **Truncation** | MEMORY.md index is capped at both 200 lines and 25KB; the byte cap binds first above ~125 chars per entry ([detail](memory-context-management.md)) |
 | **Best-effort** | Claude is instructed to read/write memories, but there's no guarantee it does |
 
 ### Maintenance habits

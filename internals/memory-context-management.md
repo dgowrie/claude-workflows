@@ -18,9 +18,11 @@ It is not the session's only always-loaded context. The CLAUDE.md hierarchy (glo
 - **25,000-byte cap** on the spliced index, checked independently of the line cap
 - At ~150 chars per line, a full index is roughly 7-10K tokens
 
-At that average line length the byte cap binds first: 200 lines x 150 chars is ~30KB, past the 25KB budget. Treat 25KB, not 200 entries, as the practical ceiling.
+The two caps cross at 125 chars per entry (25,000 / 200). Above that average the byte cap binds first and the line cap is never reached; below it, the reverse. That break-even is arithmetic on the two verified constants, so it holds whatever the real average turns out to be.
 
-> **Provenance.** The two caps above were read out of the Claude Code binary at v2.1.226 (checked 2026-08-07): the truncation notice Claude receives is templated from a `lineCap` constant of 200, and the index size warning uses a `spliceCap` of 25000 bytes. Everything else on this page (the ~150 chars/line average, the token figures, the scaling table's experience column) is estimate, not measurement. Re-check the constants when Claude Code minor versions move.
+Measured against the memory indexes on this machine (13 entries across all projects, mean 188.5 chars, max 264), the byte cap binds first with roughly 1.5x margin, so 25KB is the ceiling that matters here. That is one small corpus, not a general result. Compare your own index against the 125 break-even rather than inheriting the number.
+
+> **Provenance.** The two caps above were read out of the Claude Code binary at v2.1.226 (checked 2026-08-07): the truncation notice Claude receives is templated from a `lineCap` constant of 200, and the index size warning uses a `spliceCap` of 25000 bytes. Everything else on this page (the ~150 chars/line average, the token figures, the scaling table's experience column) is estimate, not measurement. The 125-char break-even is derived from the two constants rather than estimated, so it carries their confidence; the 188.5-char mean is a measurement of one machine's indexes, not a general figure. Re-check the constants when Claude Code minor versions move.
 
 ### Tier 2: Loaded on demand
 
