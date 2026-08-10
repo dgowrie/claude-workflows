@@ -10,7 +10,9 @@ Memory uses a cheap-index, expensive-payload design.
 
 ### Tier 1: Always loaded
 
-`MEMORY.md` (the index) is injected into every session's context automatically. Each entry is a one-line summary (~150 chars). This is the only guaranteed token cost per session.
+`MEMORY.md` (the index) is injected into every session's context automatically. Each entry is a one-line summary (~150 chars). This is the memory system's only guaranteed token cost per session.
+
+It is not the session's only always-loaded context. The CLAUDE.md hierarchy (global, project, local), every file in `~/.claude/rules/`, and the description of every model-invocable skill all load unconditionally, and together they typically outweigh the index. This page scopes to memory; budget the rest separately.
 
 - **200-line hard cap** — lines beyond 200 are truncated and invisible to Claude
 - **25,000-byte cap** on the spliced index, checked independently of the line cap
@@ -62,7 +64,7 @@ They're the only thing Claude sees before deciding to read or skip. Quality here
 
 - Aim for under 1KB per memory file — enough for context, not a full document
 - If a memory exceeds 2KB, consider whether it should be a plan or repo document instead
-- The React 19 upgrade plan memory (4.6KB) is an example of something better suited to the `claude-workflows` repo
+- This page is the worked example: several KB of reasoning, so it lives here as a repo document, while the sub-1KB `config/rules/memory-hygiene.md` carries the directive that actually loads into sessions
 
 ### Scaling expectations
 
