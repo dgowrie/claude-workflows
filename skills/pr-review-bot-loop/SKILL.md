@@ -28,12 +28,27 @@ surface that hides half of what it found.
 
 Run it on a PR you authored, after your own review pass, before requesting human review.
 
-Skip it when the bot has no opinion worth waiting for. On a prose-heavy diff, a clean Copilot round
-is **weak evidence**: measured across three rounds on a 280-line `SKILL.md`, Copilot produced
-exactly one finding, a grammar nit, while an adversarial pass over the same file produced two
-upgrades and a reinstated dismissal. Copilot's review is oriented at code. Run the loop anyway if
-you want the coverage, and report the result as "no automated objection" rather than as evidence of
-quality.
+**What a clean round is worth depends on the surface, and the split is sharp.** Measured across two
+PRs, the second of them five rounds over a mixed diff of roughly 450 lines of Python plus a skill
+document:
+
+| Surface | Bot loop | Adversarial pass |
+| --- | --- | --- |
+| Code | 7 | 7 |
+| Procedure (`SKILL.md`, `README`) | 1 | 6 |
+
+On code the two are comparable, and the bot is far cheaper. On the procedural half they are not
+close. So the decision rule is by surface, not by whether the diff "looks like prose":
+
+- **Mostly code:** run the loop first. It is the cheap pass and it competes on equal terms.
+- **Mostly procedure** (a skill, a rule, an agent definition, a `CLAUDE.md`): the loop is optional
+  and low-yield. Run `/pr-review-adversarial`, and treat a clean bot round as a free extra rather
+  than as the thing that clears the diff.
+
+One caveat that keeps this from overclaiming: in the measured run the adversarial reviewers were
+explicitly told to treat the skill document as procedure a later session executes literally, and the
+bot was given no such framing. Some of that 6-to-1 is prompt, not capability. Read it as "the bot
+was not asked the right question about procedure", not as "the bot cannot review procedure".
 
 **Self-review only.** Someone else's PR is out of scope in both directions: you cannot push the
 fixes, and driving a reviewer at their branch is noise they did not ask for. For a peer PR, use
@@ -254,7 +269,13 @@ When `nit_rounds` consecutive rounds produce only trivial findings, surface that
 keep going. Hitting `max_rounds` stops the loop and is a result to report, not a failure to retry.
 
 Report the outcome as a readiness statement: rounds run, findings accepted and declined per round,
-the terminating state, and what the clean pass is worth on this diff.
+and the terminating state.
+
+**Split the finding count by surface**, code against procedure, rather than asserting what the pass
+was worth. The claim "no automated objection" is not readable on its own; "7 findings on the code,
+1 on the skill document" tells a reviewer which half of the diff is still theirs to check, and it
+holds the claim in When to run it to account instead of taking it on faith. If the procedure half
+drew nothing, say so plainly rather than letting the total imply coverage it does not have.
 
 ---
 
@@ -293,8 +314,8 @@ head.
   API. It has already changed label once. When the parsed finding count disagrees with the declared
   count the script warns and you read the body directly; treat that warning as the format having
   moved.
-- **A clean pass is not evidence the diff is good**, and on prose it is barely evidence of anything.
-  It means one automated reviewer, oriented at code, raised no objection at this head.
+- **A clean pass is not evidence the diff is good.** It means one automated reviewer raised no
+  objection at this head, and what that is worth splits hard by surface: see When to run it.
 - **One adapter.** Every mechanic here is Copilot's. A repo whose automated reviewer is something
   else gets no coverage from this skill until its adapter is written.
 
