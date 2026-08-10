@@ -144,7 +144,7 @@
       <tr><td>Scoping</td><td>Project-directory-scoped. Global lessons need <code>CLAUDE.md</code></td></tr>
       <tr><td>Staleness</td><td>No expiry or auto-cleanup</td></tr>
       <tr><td>Conflicts</td><td>Can contradict CLAUDE.md or other memories</td></tr>
-      <tr><td>Truncation</td><td>Index truncates past 200 lines</td></tr>
+      <tr><td>Truncation</td><td>Index capped at 200 lines <em>and</em> 25KB; byte cap binds first above ~125 chars per entry</td></tr>
       <tr><td>Best-effort</td><td>No guarantee Claude reads or writes them</td></tr>
     </table>
   </section>
