@@ -265,7 +265,14 @@ def collect(cwd, handoff_doc, paths=None):
     facts = git_facts(cwd)
     blockers = []
 
-    if facts["repo_root"] is None:
+    if not Path(cwd).is_dir():
+        # An unreachable directory fails the same git call as a real directory
+        # outside any repo, so the causes have to be told apart here.
+        blockers.append({
+            "code": "cwd-unreadable",
+            "detail": "{} does not exist or cannot be read.".format(cwd),
+        })
+    elif facts["repo_root"] is None:
         blockers.append({
             "code": "not-a-git-repo",
             "detail": "{} is not inside a git repository.".format(cwd),

@@ -27,7 +27,13 @@ The mode is the second argument, defaulting to `afk`.
 
 ## Phase 0: Triage
 
-1. Run `scripts/preflight.py --handoff-doc <path> --cwd <repo>` outside the sandbox. Keep the JSON; later phases reuse it.
+1. Run the preflight script outside the sandbox, from the target project's directory. Keep the JSON; later phases reuse it.
+
+   ```bash
+   ~/.claude/skills/pickup/scripts/preflight.py --handoff-doc <path> --cwd <repo>
+   ```
+
+   That installed path is the one to use. A run happens in the project the handoff document describes, which is almost never this repo, so a repo-relative path resolves to nothing.
 2. On exit 1, print each blocker with its detail and stop. This holds in every mode, and `--force` does not reach it.
 3. Read the handoff document and every issue, PR, and file it references.
 4. Build the acceptance criteria table, fixing each criterion's verification method now, while the work still looks easy.

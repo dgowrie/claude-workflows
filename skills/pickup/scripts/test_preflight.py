@@ -355,6 +355,16 @@ class Blockers(unittest.TestCase):
         result = self.collect(outside, make_handoff_doc())
         self.assertIn("not-a-git-repo", [b["code"] for b in result["blockers"]])
 
+    def test_missing_cwd_reports_its_own_cause(self):
+        """An unreachable directory and a real directory outside any repo fail
+        the same git call. Reporting both as "not a git repository" sends the
+        reader looking for the wrong problem."""
+        missing = Path(tempfile.mkdtemp()) / "gone"
+        result = self.collect(missing, make_handoff_doc())
+        codes = [b["code"] for b in result["blockers"]]
+        self.assertIn("cwd-unreadable", codes)
+        self.assertNotIn("not-a-git-repo", codes)
+
     def test_unauthenticated_gh_blocks(self):
         repo = make_repo()
         result = self.collect(repo, make_handoff_doc(), authed=False)
