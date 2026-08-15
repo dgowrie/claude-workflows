@@ -69,6 +69,16 @@ def make_repo(default_branch="main"):
     return path
 
 
+def make_unborn_repo():
+    """An initialised repo with no commit yet, so HEAD points at nothing."""
+    path = Path(tempfile.mkdtemp())
+    git(path, "init", "-q")
+    subprocess.run(
+        ["git", "symbolic-ref", "HEAD", "refs/heads/main"], cwd=path, check=True
+    )
+    return path
+
+
 def make_handoff_doc(name="handoff-thing.md"):
     """A handoff document outside any repository.
 
@@ -151,6 +161,30 @@ class GitFacts(unittest.TestCase):
         facts = preflight.git_facts(repo)
         self.assertTrue(facts["status_ok"])
 
+    def test_detached_head_is_reported(self):
+        """`rev-parse --abbrev-ref HEAD` prints the literal "HEAD" when detached,
+        which reads as an ordinary branch name. Left unflagged, the run commits
+        onto a detached HEAD and the work is orphaned."""
+        repo = make_repo()
+        git(repo, "checkout", "-q", "--detach")
+        facts = preflight.git_facts(repo)
+        self.assertTrue(facts["detached_head"])
+
+    def test_unborn_branch_is_reported(self):
+        """An unborn HEAD also prints "HEAD", and the default-branch fallback
+        then returns that same string, making on_default_branch trivially true."""
+        repo = make_unborn_repo()
+        facts = preflight.git_facts(repo)
+        self.assertTrue(facts["unborn_branch"])
+        self.assertNotEqual(facts["default_branch"], "HEAD")
+        self.assertFalse(facts["on_default_branch"])
+
+    def test_ordinary_repo_is_neither_detached_nor_unborn(self):
+        repo = make_repo()
+        facts = preflight.git_facts(repo)
+        self.assertFalse(facts["detached_head"])
+        self.assertFalse(facts["unborn_branch"])
+
     def test_non_repo_reports_no_root(self):
         outside = Path(tempfile.mkdtemp())
         facts = preflight.git_facts(outside)
@@ -208,6 +242,34 @@ class Codeowners(unittest.TestCase):
         result = preflight.codeowners_for(repo, ["skills/pickup/SKILL.md"])
         self.assertEqual(result["owners"], [])
         self.assertTrue(result["readable"])
+
+    def test_anchored_patterns_match_only_at_the_root(self):
+        """A leading `/` anchors a CODEOWNERS rule to the repository root.
+        Stripping it before deciding which branch to take sends anchored rules
+        down the basename path, which names owners for files they do not own."""
+        repo = make_repo()
+        (repo / "CODEOWNERS").write_text(
+            "/*.md @root-glob\n"
+            "/README.md @root-literal\n"
+        )
+        self.assertEqual(
+            preflight.codeowners_for(repo, ["docs/sub/file.md"])["owners"], []
+        )
+        self.assertEqual(
+            preflight.codeowners_for(repo, ["docs/README.md"])["owners"], []
+        )
+        self.assertEqual(
+            preflight.codeowners_for(repo, ["README.md"])["owners"], ["@root-literal"]
+        )
+        self.assertEqual(
+            preflight.codeowners_for(repo, ["CHANGELOG.md"])["owners"], ["@root-glob"]
+        )
+
+    def test_anchored_directory_still_matches_below_itself(self):
+        repo = make_repo()
+        (repo / "CODEOWNERS").write_text("/docs @docs-team\n")
+        result = preflight.codeowners_for(repo, ["docs/sub/file.md"])
+        self.assertEqual(result["owners"], ["@docs-team"])
 
     def test_star_does_not_cross_a_path_separator(self):
         """Python's fnmatch lets `*` match `/`, so `docs/*.md` would otherwise
@@ -326,9 +388,9 @@ class Blockers(unittest.TestCase):
     contradicting its issue, an irreversible change) stay model judgment in
     TRIAGE.md; this script must never appear to have ruled on them."""
 
-    def collect(self, repo, handoff, prs=None, authed=True):
+    def collect(self, repo, handoff, prs=None, authed="ok"):
         with mock.patch.object(preflight, "gh_open_prs", return_value=prs or []), \
-             mock.patch.object(preflight, "gh_authenticated", return_value=authed):
+             mock.patch.object(preflight, "gh_auth_state", return_value=authed):
             return preflight.collect(repo, handoff)
 
     def test_clean_run_has_no_blockers(self):
@@ -367,7 +429,7 @@ class Blockers(unittest.TestCase):
 
     def test_unauthenticated_gh_blocks(self):
         repo = make_repo()
-        result = self.collect(repo, make_handoff_doc(), authed=False)
+        result = self.collect(repo, make_handoff_doc(), authed="unauthenticated")
         self.assertIn("gh-unauthenticated", [b["code"] for b in result["blockers"]])
 
     def test_default_branch_is_not_a_blocker(self):
@@ -381,7 +443,7 @@ class Blockers(unittest.TestCase):
     def test_every_blocker_carries_a_detail(self):
         repo = make_repo()
         (repo / "stray.txt").write_text("x\n")
-        result = self.collect(repo, str(repo / "nope.md"), authed=False)
+        result = self.collect(repo, str(repo / "nope.md"), authed="unauthenticated")
         self.assertTrue(result["blockers"])
         for blocker in result["blockers"]:
             self.assertTrue(blocker.get("detail"), blocker)
@@ -393,14 +455,14 @@ class Resume(unittest.TestCase):
         doc = make_handoff_doc()
         prs = [{"number": 11, "body": "handoff-thing.md", "url": "u", "headRefName": "feat/thing"}]
         with mock.patch.object(preflight, "gh_open_prs", return_value=prs), \
-             mock.patch.object(preflight, "gh_authenticated", return_value=True):
+             mock.patch.object(preflight, "gh_auth_state", return_value="ok"):
             result = preflight.collect(repo, doc)
         self.assertEqual(result["existing_pr"]["number"], 11)
 
     def test_absent_pr_is_null(self):
         repo = make_repo()
         with mock.patch.object(preflight, "gh_open_prs", return_value=[]), \
-             mock.patch.object(preflight, "gh_authenticated", return_value=True):
+             mock.patch.object(preflight, "gh_auth_state", return_value="ok"):
             result = preflight.collect(repo, make_handoff_doc())
         self.assertIsNone(result["existing_pr"])
 
@@ -415,16 +477,47 @@ class Resume(unittest.TestCase):
 
         with mock.patch.object(preflight, "run", side_effect=fake_run), \
              mock.patch.object(preflight, "gh_open_prs", return_value=[]), \
-             mock.patch.object(preflight, "gh_authenticated", return_value=True):
+             mock.patch.object(preflight, "gh_auth_state", return_value="ok"):
             result = preflight.collect(repo, make_handoff_doc())
         self.assertIn("git-status-failed", [b["code"] for b in result["blockers"]])
+
+    def test_saturated_lookup_blocks(self):
+        """A full page means the window may have cut off the run's own PR.
+        `gh pr list` returns newest first, so a stale resume against a busy repo
+        is the case that silently opens a duplicate."""
+        repo = make_repo()
+        page = [{"number": n, "body": ""} for n in range(preflight.PR_LIST_LIMIT)]
+        with mock.patch.object(preflight, "gh_open_prs", return_value=page), \
+             mock.patch.object(preflight, "gh_auth_state", return_value="ok"):
+            result = preflight.collect(repo, make_handoff_doc())
+        self.assertIn("pr-lookup-truncated", [b["code"] for b in result["blockers"]])
+
+    def test_short_page_does_not_block(self):
+        repo = make_repo()
+        page = [{"number": 1, "body": ""}]
+        with mock.patch.object(preflight, "gh_open_prs", return_value=page), \
+             mock.patch.object(preflight, "gh_auth_state", return_value="ok"):
+            result = preflight.collect(repo, make_handoff_doc())
+        self.assertNotIn(
+            "pr-lookup-truncated", [b["code"] for b in result["blockers"]]
+        )
+
+    def test_gh_timeout_is_not_reported_as_unauthenticated(self):
+        """A hung network call and a missing credential are different problems
+        with different remedies; one label for both sends the reader wrong."""
+        repo = make_repo()
+        with mock.patch.object(preflight, "gh_auth_state", return_value="timeout"):
+            result = preflight.collect(repo, make_handoff_doc())
+        codes = [b["code"] for b in result["blockers"]]
+        self.assertIn("gh-timeout", codes)
+        self.assertNotIn("gh-unauthenticated", codes)
 
     def test_failed_lookup_blocks_rather_than_reporting_no_pr(self):
         """Proceeding on a failed lookup would open a second PR for a run that
         already has one, unattended and outward-facing."""
         repo = make_repo()
         with mock.patch.object(preflight, "gh_open_prs", return_value=None), \
-             mock.patch.object(preflight, "gh_authenticated", return_value=True):
+             mock.patch.object(preflight, "gh_auth_state", return_value="ok"):
             result = preflight.collect(repo, make_handoff_doc())
         self.assertIn("pr-lookup-failed", [b["code"] for b in result["blockers"]])
         self.assertIsNone(result["existing_pr"])
@@ -432,7 +525,7 @@ class Resume(unittest.TestCase):
     def test_genuinely_empty_lookup_does_not_block(self):
         repo = make_repo()
         with mock.patch.object(preflight, "gh_open_prs", return_value=[]), \
-             mock.patch.object(preflight, "gh_authenticated", return_value=True):
+             mock.patch.object(preflight, "gh_auth_state", return_value="ok"):
             result = preflight.collect(repo, make_handoff_doc())
         self.assertNotIn("pr-lookup-failed", [b["code"] for b in result["blockers"]])
 
@@ -440,7 +533,7 @@ class Resume(unittest.TestCase):
         """One root cause, one blocker. The gh-unauthenticated blocker already
         explains why no lookup happened."""
         repo = make_repo()
-        with mock.patch.object(preflight, "gh_authenticated", return_value=False):
+        with mock.patch.object(preflight, "gh_auth_state", return_value="unauthenticated"):
             result = preflight.collect(repo, make_handoff_doc())
         codes = [b["code"] for b in result["blockers"]]
         self.assertIn("gh-unauthenticated", codes)
@@ -451,17 +544,17 @@ class Resume(unittest.TestCase):
         as though the lookup succeeded would let a resume silently restart."""
         repo = make_repo()
         with mock.patch.object(preflight, "gh_open_prs") as lookup, \
-             mock.patch.object(preflight, "gh_authenticated", return_value=False):
+             mock.patch.object(preflight, "gh_auth_state", return_value="unauthenticated"):
             result = preflight.collect(repo, make_handoff_doc())
         lookup.assert_not_called()
         self.assertIsNone(result["existing_pr"])
 
 
 class Cli(unittest.TestCase):
-    def run_main(self, argv, prs=None, authed=True):
+    def run_main(self, argv, prs=None, authed="ok"):
         out = []
         with mock.patch.object(preflight, "gh_open_prs", return_value=prs or []), \
-             mock.patch.object(preflight, "gh_authenticated", return_value=authed), \
+             mock.patch.object(preflight, "gh_auth_state", return_value=authed), \
              mock.patch("builtins.print", side_effect=lambda *a, **k: out.append(a[0] if a else "")):
             code = preflight.main(argv)
         return code, "\n".join(str(line) for line in out)
@@ -487,6 +580,24 @@ class Cli(unittest.TestCase):
         self.assertEqual(code, preflight.BLOCKED)
         parsed = json.loads(output)
         self.assertTrue(parsed["blockers"])
+
+    def test_paths_resolve_owners_end_to_end(self):
+        """The `--paths` route is what Phase 5 uses to name a reviewer, and it
+        is the one place the CODEOWNERS matcher is reached through `collect`."""
+        repo = make_repo()
+        (repo / ".github").mkdir()
+        (repo / ".github" / "CODEOWNERS").write_text("skills/ @skills-team\n")
+        git(repo, "add", ".github/CODEOWNERS")
+        git(repo, "commit", "-q", "-m", "owners")
+        code, output = self.run_main([
+            "--handoff-doc", make_handoff_doc(),
+            "--cwd", str(repo),
+            "--paths", "skills/pickup/SKILL.md",
+        ])
+        self.assertEqual(code, preflight.CLEAR)
+        parsed = json.loads(output)
+        self.assertEqual(parsed["codeowners"]["owners"], ["@skills-team"])
+        self.assertTrue(parsed["codeowners"]["readable"])
 
     def test_missing_required_argument_is_a_usage_error(self):
         code, _ = self.run_main(["--cwd", "/tmp"])

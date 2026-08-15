@@ -34,6 +34,13 @@ Known bounds:
   bodies. Two handoff documents sharing a basename across a repo would collide;
   the lowest-numbered match wins, so the collision resolves to a stable answer
   rather than an arbitrary one.
+* The open-PR listing reads one window of `PR_LIST_LIMIT` entries, newest
+  first. A repo busy enough to fill it reports `pr-lookup-truncated` rather than
+  a possibly incomplete answer, since a resume that cannot see its own pull
+  request opens a duplicate.
+* Only the `gh` calls carry a deadline. `git status` may legitimately run long
+  on a large repo with a cold cache, and timing it out would convert a benign
+  state into a blocker.
 
 Run this OUTSIDE the command sandbox. `gh auth status` exits 1 in the sandbox
 because the credential keyring is unreachable, which reports a working install as
@@ -51,16 +58,35 @@ from pathlib import Path
 
 CLEAR, BLOCKED, USAGE_ERROR = 0, 1, 2
 
+# Conventional shell exit status for a timed-out command, reused here so a
+# caller can tell a hang apart from an ordinary failure.
+TIMEOUT_EXIT = 124
+
+# `gh pr list` pages, and a full page means the window may have cut off the
+# run's own PR. Set high enough that saturation signals a pathological repo
+# rather than an ordinary busy one: a 634-PR repo returns in about 3 seconds.
+PR_LIST_LIMIT = 1000
+
+# Only the network-bound `gh` calls get a deadline. `git status` can legitimately
+# take a long time on a large repo with a cold cache, and timing it out would
+# turn a benign state into a blocker.
+GH_TIMEOUT_SECONDS = 30
+
 CODEOWNERS_LOCATIONS = (".github/CODEOWNERS", "CODEOWNERS", "docs/CODEOWNERS")
 
 
-def run(args, cwd):
+def run(args, cwd, timeout=None):
     """Run a command, returning (returncode, raw stdout). Never raises.
 
     Deliberately unstripped. `git status --porcelain` encodes the status in the
     first two columns, so leading whitespace is data; stripping it here silently
     shifted every reported path by one character. Callers wanting a scalar strip
     at the call site.
+
+    `subprocess.TimeoutExpired` is a `SubprocessError`, not an `OSError`, so it
+    needs naming explicitly; without it a deadline would convert a hang into an
+    uncaught traceback, which is worse for a caller that parses stdout as JSON
+    on both the clear and the blocked exit.
     """
     try:
         completed = subprocess.run(
@@ -68,8 +94,11 @@ def run(args, cwd):
             cwd=str(cwd),
             capture_output=True,
             text=True,
+            timeout=timeout,
         )
-    except (OSError, ValueError):
+    except subprocess.TimeoutExpired:
+        return TIMEOUT_EXIT, ""
+    except (OSError, ValueError, subprocess.SubprocessError):
         return 1, ""
     return completed.returncode, completed.stdout
 
@@ -86,8 +115,14 @@ def _default_branch(cwd):
         )
         if code == 0:
             return candidate
-    _, current = run(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd)
-    return current.strip() or None
+    code, current = run(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd)
+    current = current.strip()
+    # A detached or unborn HEAD prints the literal "HEAD", which is not a branch
+    # name. Returning it would make `on_default_branch` compare a string to
+    # itself and come out true.
+    if code != 0 or not current or current == "HEAD":
+        return None
+    return current
 
 
 def _dirty_paths(porcelain):
@@ -120,6 +155,8 @@ def git_facts(cwd):
             "on_default_branch": False,
             "tree_clean": False,
             "status_ok": False,
+            "detached_head": False,
+            "unborn_branch": False,
             "dirty_paths": [],
         }
 
@@ -132,13 +169,24 @@ def git_facts(cwd):
     status_ok = status_code == 0
     default = _default_branch(cwd)
     dirty = _dirty_paths(porcelain)
+
+    # Both states print "HEAD" from `rev-parse --abbrev-ref`, so neither is
+    # visible in the branch name alone. `symbolic-ref` fails only when HEAD is
+    # detached; `rev-parse --verify HEAD` fails only before the first commit.
+    symbolic_code, _ = run(["git", "symbolic-ref", "--quiet", "HEAD"], cwd)
+    verify_code, _ = run(["git", "rev-parse", "--verify", "--quiet", "HEAD"], cwd)
+    unborn = verify_code != 0
+    detached = symbolic_code != 0 and not unborn
+
     return {
         "repo_root": root,
         "current_branch": branch or None,
         "default_branch": default,
-        "on_default_branch": bool(branch) and branch == default,
+        "on_default_branch": bool(default) and branch == default,
         "tree_clean": status_ok and not dirty,
         "status_ok": status_ok,
+        "detached_head": detached,
+        "unborn_branch": unborn,
         "dirty_paths": dirty,
     }
 
@@ -163,10 +211,15 @@ def _matches_per_segment(pattern, path):
 def _codeowners_matches(pattern, path):
     if pattern == "*":
         return True
+    # A leading `/` anchors the rule to the repository root. Stripping it before
+    # choosing a branch sends anchored rules down the basename path, which then
+    # claims files anywhere in the tree: `/README.md` would own
+    # `docs/README.md`. Capture the anchor before it is discarded.
+    anchored = pattern.startswith("/")
     cleaned = pattern.lstrip("/")
     if cleaned.endswith("/"):
         return path.startswith(cleaned)
-    if "/" not in cleaned:
+    if "/" not in cleaned and not anchored:
         return fnmatch.fnmatch(os.path.basename(path), cleaned)
     if path.startswith(cleaned + "/"):
         return True
@@ -190,7 +243,11 @@ def codeowners_for(repo_root, paths):
         return {"file": None, "owners": [], "readable": True}
 
     try:
-        contents = (root / location).read_text()
+        # Pin the encoding. Defaulting to the platform's preferred encoding
+        # makes the unreadable branch depend on the host locale: on a latin-1
+        # host a corrupt file decodes to mojibake, no error is raised, and the
+        # result is the silent zero `readable` exists to prevent.
+        contents = (root / location).read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
         return {"file": str(root / location), "owners": [], "readable": False}
 
@@ -217,9 +274,16 @@ def codeowners_for(repo_root, paths):
     return {"file": str(root / location), "owners": owners, "readable": True}
 
 
-def gh_authenticated(cwd):
-    code, _ = run(["gh", "auth", "status"], cwd)
-    return code == 0
+def gh_auth_state(cwd):
+    """One of "ok", "timeout", or "unauthenticated".
+
+    A hung network call and a missing credential need different remedies, so
+    reporting both as unauthenticated sends the reader after the wrong problem.
+    """
+    code, _ = run(["gh", "auth", "status"], cwd, timeout=GH_TIMEOUT_SECONDS)
+    if code == TIMEOUT_EXIT:
+        return "timeout"
+    return "ok" if code == 0 else "unauthenticated"
 
 
 def gh_open_prs(cwd):
@@ -235,9 +299,10 @@ def gh_open_prs(cwd):
             "gh", "pr", "list",
             "--state", "open",
             "--json", "number,url,headRefName,body",
-            "--limit", "100",
+            "--limit", str(PR_LIST_LIMIT),
         ],
         cwd,
+        timeout=GH_TIMEOUT_SECONDS,
     )
     if code != 0 or not out.strip():
         return None
@@ -283,6 +348,19 @@ def collect(cwd, handoff_doc, paths=None):
             "detail": "`git status` failed, so the tree state is unknown. "
                       "A clean-looking empty result cannot be trusted here.",
         })
+    elif facts["unborn_branch"]:
+        blockers.append({
+            "code": "unborn-branch",
+            "detail": "The repository has no commit yet, so there is no branch "
+                      "to build on.",
+        })
+    elif facts["detached_head"]:
+        blockers.append({
+            "code": "detached-head",
+            "detail": "HEAD is detached. Committing here orphans the work, and "
+                      "the literal branch name \"HEAD\" reads as an ordinary "
+                      "feature branch.",
+        })
     elif not facts["tree_clean"]:
         blockers.append({
             "code": "dirty-tree",
@@ -299,8 +377,17 @@ def collect(cwd, handoff_doc, paths=None):
             "detail": "Cannot read handoff document at {}.".format(handoff_doc),
         })
 
-    authenticated = gh_authenticated(cwd)
-    if not authenticated:
+    auth_state = gh_auth_state(cwd)
+    authenticated = auth_state == "ok"
+    if auth_state == "timeout":
+        blockers.append({
+            "code": "gh-timeout",
+            "detail": "`gh auth status` did not respond within {} seconds; "
+                      "the network or proxy is not answering.".format(
+                          GH_TIMEOUT_SECONDS
+                      ),
+        })
+    elif not authenticated:
         blockers.append({
             "code": "gh-unauthenticated",
             "detail": "`gh` is unavailable or not authenticated; "
@@ -308,6 +395,12 @@ def collect(cwd, handoff_doc, paths=None):
         })
 
     open_prs = gh_open_prs(cwd) if authenticated else None
+    if authenticated and open_prs is not None and len(open_prs) >= PR_LIST_LIMIT:
+        blockers.append({
+            "code": "pr-lookup-truncated",
+            "detail": "The open-PR listing filled its {}-entry window, so an "
+                      "existing run PR cannot be ruled out.".format(PR_LIST_LIMIT),
+        })
     if authenticated and open_prs is None:
         blockers.append({
             "code": "pr-lookup-failed",
@@ -326,7 +419,7 @@ def collect(cwd, handoff_doc, paths=None):
     result = dict(facts)
     result.update({
         "handoff_doc": {"path": str(handoff_doc), "readable": doc_readable},
-        "gh_authenticated": authenticated,
+        "gh_auth_state": auth_state,
         "existing_pr": existing_pr,
         "codeowners": owners,
         "blockers": blockers,
