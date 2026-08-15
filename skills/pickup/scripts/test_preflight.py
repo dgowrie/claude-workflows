@@ -129,6 +129,28 @@ class GitFacts(unittest.TestCase):
         self.assertFalse(facts["tree_clean"])
         self.assertIn("new.txt", facts["dirty_paths"])
 
+    def test_failed_status_reports_unknown_rather_than_clean(self):
+        """A gate that fails open is worse than no gate. When `git status`
+        fails its output is empty, which looks exactly like a clean tree; the
+        run must refuse rather than proceed on an unknown tree state."""
+        repo = make_repo()
+        real_run = preflight.run
+
+        def fake_run(args, cwd):
+            if "status" in args:
+                return 1, ""
+            return real_run(args, cwd)
+
+        with mock.patch.object(preflight, "run", side_effect=fake_run):
+            facts = preflight.git_facts(repo)
+        self.assertFalse(facts["status_ok"])
+        self.assertFalse(facts["tree_clean"])
+
+    def test_successful_status_is_marked_ok(self):
+        repo = make_repo()
+        facts = preflight.git_facts(repo)
+        self.assertTrue(facts["status_ok"])
+
     def test_non_repo_reports_no_root(self):
         outside = Path(tempfile.mkdtemp())
         facts = preflight.git_facts(outside)
@@ -186,6 +208,22 @@ class Codeowners(unittest.TestCase):
         result = preflight.codeowners_for(repo, ["skills/pickup/SKILL.md"])
         self.assertEqual(result["owners"], [])
         self.assertTrue(result["readable"])
+
+    def test_star_does_not_cross_a_path_separator(self):
+        """Python's fnmatch lets `*` match `/`, so `docs/*.md` would otherwise
+        claim ownership of `docs/sub/file.md` and name the wrong reviewer."""
+        repo = make_repo()
+        (repo / "CODEOWNERS").write_text("docs/*.md @docs-team\n")
+        nested = preflight.codeowners_for(repo, ["docs/sub/file.md"])
+        self.assertEqual(nested["owners"], [])
+        direct = preflight.codeowners_for(repo, ["docs/file.md"])
+        self.assertEqual(direct["owners"], ["@docs-team"])
+
+    def test_directory_prefix_still_matches_at_any_depth(self):
+        repo = make_repo()
+        (repo / "CODEOWNERS").write_text("skills/ @skills-team\n")
+        result = preflight.codeowners_for(repo, ["skills/pickup/scripts/preflight.py"])
+        self.assertEqual(result["owners"], ["@skills-team"])
 
     def test_undecodable_file_reports_unreadable_rather_than_no_owners(self):
         """An empty owner list must mean "no rule matched", never "the file
@@ -355,6 +393,21 @@ class Resume(unittest.TestCase):
              mock.patch.object(preflight, "gh_authenticated", return_value=True):
             result = preflight.collect(repo, make_handoff_doc())
         self.assertIsNone(result["existing_pr"])
+
+    def test_failed_git_status_blocks(self):
+        repo = make_repo()
+        real_run = preflight.run
+
+        def fake_run(args, cwd):
+            if "status" in args:
+                return 1, ""
+            return real_run(args, cwd)
+
+        with mock.patch.object(preflight, "run", side_effect=fake_run), \
+             mock.patch.object(preflight, "gh_open_prs", return_value=[]), \
+             mock.patch.object(preflight, "gh_authenticated", return_value=True):
+            result = preflight.collect(repo, make_handoff_doc())
+        self.assertIn("git-status-failed", [b["code"] for b in result["blockers"]])
 
     def test_failed_lookup_blocks_rather_than_reporting_no_pr(self):
         """Proceeding on a failed lookup would open a second PR for a run that

@@ -22,9 +22,11 @@ script must never look like it has ruled on those.
 Known bounds:
 
 * CODEOWNERS support covers `*`, basename globs (`*.md`), directory prefixes
-  (`skills/`), and anchored paths, with last-match-wins. It does not implement
+  (`skills/`), and anchored paths, with last-match-wins, and wildcards stay
+  inside one path segment as CODEOWNERS specifies. It does not implement
   negation or the full gitignore pattern grammar. An unmatched path contributes
-  no owners rather than a wrong one.
+  no owners rather than a wrong one, and an unreadable CODEOWNERS reports
+  `readable: false` rather than an empty owner list.
 * The default branch is read from `origin/HEAD` when a remote is configured, and
   otherwise inferred from whether `main` or `master` exists locally. A repo whose
   default branch is neither, and which has no remote, reports its current branch.
@@ -117,12 +119,17 @@ def git_facts(cwd):
             "default_branch": None,
             "on_default_branch": False,
             "tree_clean": False,
+            "status_ok": False,
             "dirty_paths": [],
         }
 
     _, branch = run(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd)
     branch = branch.strip()
-    _, porcelain = run(["git", "status", "--porcelain"], cwd)
+    # A failed `git status` prints nothing, which is indistinguishable from a
+    # clean tree. Keeping the return code is what stops the dirty-tree gate
+    # from failing open on an unknown tree state.
+    status_code, porcelain = run(["git", "status", "--porcelain"], cwd)
+    status_ok = status_code == 0
     default = _default_branch(cwd)
     dirty = _dirty_paths(porcelain)
     return {
@@ -130,9 +137,27 @@ def git_facts(cwd):
         "current_branch": branch or None,
         "default_branch": default,
         "on_default_branch": bool(branch) and branch == default,
-        "tree_clean": not dirty,
+        "tree_clean": status_ok and not dirty,
+        "status_ok": status_ok,
         "dirty_paths": dirty,
     }
+
+
+def _matches_per_segment(pattern, path):
+    """Glob each path segment separately.
+
+    `fnmatch` on the whole path lets `*` span separators, so `docs/*.md` would
+    match `docs/sub/file.md` and name the wrong owners. Comparing segment by
+    segment confines each wildcard to its own segment.
+    """
+    pattern_parts = pattern.split("/")
+    path_parts = path.split("/")
+    if len(pattern_parts) != len(path_parts):
+        return False
+    return all(
+        fnmatch.fnmatch(path_part, pattern_part)
+        for pattern_part, path_part in zip(pattern_parts, path_parts)
+    )
 
 
 def _codeowners_matches(pattern, path):
@@ -143,7 +168,9 @@ def _codeowners_matches(pattern, path):
         return path.startswith(cleaned)
     if "/" not in cleaned:
         return fnmatch.fnmatch(os.path.basename(path), cleaned)
-    return fnmatch.fnmatch(path, cleaned) or path.startswith(cleaned + "/")
+    if path.startswith(cleaned + "/"):
+        return True
+    return _matches_per_segment(cleaned, path)
 
 
 def codeowners_for(repo_root, paths):
@@ -242,6 +269,12 @@ def collect(cwd, handoff_doc, paths=None):
         blockers.append({
             "code": "not-a-git-repo",
             "detail": "{} is not inside a git repository.".format(cwd),
+        })
+    elif not facts["status_ok"]:
+        blockers.append({
+            "code": "git-status-failed",
+            "detail": "`git status` failed, so the tree state is unknown. "
+                      "A clean-looking empty result cannot be trusted here.",
         })
     elif not facts["tree_clean"]:
         blockers.append({
