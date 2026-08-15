@@ -25,6 +25,8 @@ The mode is the second argument, defaulting to `afk`.
 
 `hitl` is interactive only until triage clears. After that it runs like `afk`.
 
+For the mode gate, strictness runs `afk` < `semi` < `hitl`. The order is by how much the human sees before implementation starts, which is what the gate protects: `hitl` resolves every open question with the human first, `semi` shows them the triage and its batches, `afk` shows them nothing until there is a PR.
+
 ## Phase 0: Triage
 
 1. Run the preflight script outside the sandbox, from the target project's directory. Keep the JSON; later phases reuse it.
@@ -34,21 +36,21 @@ The mode is the second argument, defaulting to `afk`.
    ```
 
    That installed path is the one to use. A run happens in the project the handoff document describes, which is almost never this repo, so a repo-relative path resolves to nothing.
-2. On exit 1, print each blocker with its detail and stop. This holds in every mode, and `--force` does not reach it.
-3. Read the handoff document and every issue, PR, and file it references.
-4. Build the acceptance criteria table, fixing each criterion's verification method now, while the work still looks easy.
-5. Classify every open question against the taxonomies in `TRIAGE.md`. A hard blocker stops the run here, printed the same way as a preflight blocker.
-6. Count the user-visible judgment calls and recommend a mode.
-7. Write the triage file.
-8. Apply the mode gate. When the recommended mode is stricter than the requested one, print the mismatch, name the forks that caused it, and stop unless `--force` is present. Then follow the mode's row in the table above.
+2. Write the triage file immediately, carrying the preflight result and any blockers it reported. Every later step updates it in place, and every stop below updates it before stopping, so the run always leaves this artifact behind.
+3. On a non-zero exit, stop. On exit 1 print each blocker with its detail; on any other non-zero exit print the raw output, which covers the usage error and a crash alike. This holds in every mode, and `--force` does not reach it.
+4. Read the handoff document and every issue, PR, and file it references.
+5. Build the acceptance criteria table, fixing each criterion's verification method now, while the work still looks easy.
+6. Classify every open question against the taxonomies in `TRIAGE.md`. A hard blocker stops the run here, printed the same way as a preflight blocker.
+7. Count the user-visible judgment calls and recommend a mode.
+8. Apply the mode gate. When the recommended mode is stricter than the requested one (`afk` < `semi` < `hitl`), print the mismatch, name the forks that caused it, and stop unless `--force` is present. Then follow the mode's row in the table above.
 
-Phase 0 is done when every acceptance criterion carries a verification method, every open question carries a class, the triage file exists, and the mode is settled.
+Phase 0 is done when every acceptance criterion carries a verification method, every open question carries a class, the triage file records the outcome the run actually reached, and the mode is settled.
 
 ## Phase 1: Branch
 
 When preflight reported an existing pull request, this run is a resume: read that PR's description for the state the earlier run reached, and re-enter at the phase its Outstanding section points to.
 
-Otherwise, on the default branch, fetch and branch from `origin/main` as `type/<issue#>-<slug>`, taking the issue from the handoff document and falling back to `type/<slug>` from its title. On a feature branch already, keep it; the handoff most likely came from a session that made it.
+Otherwise, on the default branch, branch as `type/<issue#>-<slug>`, taking the issue from the handoff document and falling back to `type/<slug>` from its title. `type` is the Conventional Commits type matching the work. Branch from `origin/<default_branch>` after fetching when the repo has a remote, and from the local `<default_branch>` when it does not; take `default_branch` from the Phase 0 preflight JSON rather than assuming `main`, since preflight resolves it and repos differ. On a feature branch already, keep it; the handoff most likely came from a session that made it.
 
 Phase 1 is done when the branch is a feature branch and its name has been printed.
 
@@ -86,7 +88,13 @@ Phase 4 is done when a full cycle completes with a clean bot pass and zero new c
 
 ## Phase 5: Hand back
 
-Mark the pull request ready for review. Resolve reviewers by re-running preflight with `--paths` over the changed files and using the CODEOWNERS result, falling back to a reviewer named in the handoff document; when neither yields one, say so rather than guessing at a person. Update the description a final time and print a summary: criteria met, criteria unverified, decisions taken, anything outstanding.
+Mark the pull request ready for review. Resolve reviewers by re-running preflight over the changed files, keeping the arguments from Phase 0 and adding `--paths`:
+
+```bash
+~/.claude/skills/pickup/scripts/preflight.py --handoff-doc <path> --cwd <repo> --paths <changed files>
+```
+
+Phase 5 consumes only the `codeowners` field, so a non-zero exit here is worth printing but does not abort the hand-back: by this point the run's own PR exists and a build artifact left in the tree is enough to report a blocker. Fall back to a reviewer named in the handoff document, and when neither yields one, say so rather than guessing at a person. Update the description a final time and print a summary: criteria met, criteria unverified, decisions taken, anything outstanding.
 
 Phase 5 is done when the pull request is ready for review, a reviewer is requested or their absence is stated, and the summary is printed.
 

@@ -52,7 +52,9 @@ Count the user-visible judgment calls after classification, and note whether the
 
 Three individually cheap forks in one component means the run would be designing that component rather than implementing a specification. The threshold is a starting default, deliberately visible here so it can be corrected once real runs show where it sits wrong.
 
-Triage recommends `afk` or `hitl` and never `semi`. Density measures how ambiguous the handoff document is, while `semi` expresses how much oversight the human wants at phase boundaries; that is a preference brought to the run rather than a property readable from the document. A `semi` run is therefore never subject to a mode mismatch on its own account: apply the table above to decide whether its triage should have been `hitl`.
+Triage recommends `afk` or `hitl` and never `semi`. Density measures how ambiguous the handoff document is, while `semi` expresses how much oversight the human wants at phase boundaries; that is a preference brought to the run rather than a property readable from the document.
+
+A `semi` run is still graded by the same table, using the strictness order in [`SKILL.md`](SKILL.md) (`afk` < `semi` < `hitl`): a `semi` run whose triage scores `hitl` halts as a mode mismatch, and one that scores `afk` proceeds.
 
 When the recommended mode is stricter than the requested mode, the run halts with a mode mismatch and names the forks that caused it. `--force` proceeds anyway. The asymmetry is the point: a blocker means the run cannot know something, while a mismatch means the human probably wants to be present. Only the second is the human's to overrule.
 
@@ -77,7 +79,9 @@ A criterion proven only by tier 3 stays unverified in the summary. Reporting it 
 
 ### Triage file
 
-Written beside the handoff document as `<handoff-basename>.triage.md` before anything else happens, and never rewritten. When that directory is not writable, it goes to the session scratchpad and the run prints the path. This is the one artifact whose value survives a run that never reaches a pull request.
+Written beside the handoff document as `<handoff-basename>.triage.md` as soon as preflight returns, then updated in place as triage proceeds and once more at whatever point the run stops. When that directory is not writable, it goes to the session scratchpad and the run prints the path.
+
+Writing it first is the whole point: this is the one artifact whose value survives a run that never reaches a pull request, and the runs that never reach one are exactly the runs that stop early. A triage file written only at the end of a successful triage would be missing from every blocked run, which is when its `## Blockers` section is the only record of what happened.
 
 ```markdown
 # Triage: <handoff document name>
