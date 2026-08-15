@@ -7,7 +7,8 @@ Claude Code's built-in persistence (memory, plans) is useful but fragile: memori
 ## Structure
 
 ```
-config/        Global CLAUDE.md and rules, symlinked into ~/.claude/
+config/        Global CLAUDE.md, rules, and hooks, symlinked into ~/.claude/
+config/scripts/ Settings template + hook-wiring checks (see its README)
 internals/     How Claude Code works under the hood
 workflows/     Patterns and practices for effective use
 explorations/  Session notes and behavioral findings
@@ -92,7 +93,7 @@ Rules in `config/rules/` are symlinked into `~/.claude/rules/`, making them glob
 
 ### Hooks
 
-Hook scripts in `config/hooks/` are symlinked into `~/.claude/hooks/`. Unlike skills and rules, a hook script is inert until it is *wired* to an event in `~/.claude/settings.json` (a machine-local file that is **not** tracked in this repo). Provisioning a hook is therefore two steps: symlink the script, then add its `hooks` entry (event + matcher) to `settings.json`.
+Hook scripts in `config/hooks/` are symlinked into `~/.claude/hooks/`. Unlike skills and rules, a hook script is inert until it is *wired* to an event in `~/.claude/settings.json` (a machine-local file that is **not** tracked in this repo, since it also holds personal posture prefs). Provisioning a hook is therefore two steps: symlink the script, then add its `hooks` entry (event + matcher) to `settings.json`. The tracked template [`config/settings.example.json`](config/settings.example.json) carries the reviewable wiring; see [`config/scripts/`](config/scripts/README.md).
 
 ```
 ~/.claude/hooks/block-em-dash.sh -> ~/dev/claude-workflows/config/hooks/block-em-dash.sh
@@ -101,7 +102,7 @@ Hook scripts in `config/hooks/` are symlinked into `~/.claude/hooks/`. Unlike sk
 - [`block-em-dash.sh`](config/hooks/block-em-dash.sh) - PreToolUse hook enforcing the no-em-dash rule. Requires matcher `Write|Edit|Bash` in `settings.json` so it inspects the inline Bash command string (`gh`/`git` titles, commit subjects), not just `Write`/`Edit`. Tested via [`block-em-dash.test.sh`](config/hooks/block-em-dash.test.sh) (`bash config/hooks/block-em-dash.test.sh`).
 - [`block-claude-attribution.sh`](config/hooks/block-claude-attribution.sh) - PreToolUse hook blocking Claude attribution footers and `Co-Authored-By` trailers.
 
-Because the matcher wiring lives in untracked `settings.json`, a committed hook will not fire for anyone who has not mirrored the matcher locally. Tracking that drift is [#24](https://github.com/dgowrie/claude-workflows/issues/24).
+Because the matcher wiring lives in untracked `settings.json`, a committed hook will not fire for anyone who has not mirrored the matcher locally. [#24](https://github.com/dgowrie/claude-workflows/issues/24) closes that gap: `config/settings.example.json` tracks the wiring, and `config/scripts/validate-hook-wiring.sh` fails if any committed hook is unwired in a given `settings.json` (tracked template or live).
 
 ### Agents
 
