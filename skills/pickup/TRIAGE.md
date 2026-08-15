@@ -52,6 +52,8 @@ Count the user-visible judgment calls after classification, and note whether the
 
 Three individually cheap forks in one component means the run would be designing that component rather than implementing a specification. The threshold is a starting default, deliberately visible here so it can be corrected once real runs show where it sits wrong.
 
+Triage recommends `afk` or `hitl` and never `semi`. Density measures how ambiguous the handoff document is, while `semi` expresses how much oversight the human wants at phase boundaries; that is a preference brought to the run rather than a property readable from the document. A `semi` run is therefore never subject to a mode mismatch on its own account: apply the table above to decide whether its triage should have been `hitl`.
+
 When the recommended mode is stricter than the requested mode, the run halts with a mode mismatch and names the forks that caused it. `--force` proceeds anyway. The asymmetry is the point: a blocker means the run cannot know something, while a mismatch means the human probably wants to be present. Only the second is the human's to overrule.
 
 ## Acceptance criteria

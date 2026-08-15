@@ -54,7 +54,7 @@ Phase 1 is done when the branch is a feature branch and its name has been printe
 4. Update the description at every phase boundary from here on.
 5. For each judgment call, build the reversible option, add its Decisions Log row, and leave a `:notebook:` inline comment where the decision shows up in the diff.
 
-Phase 2 is done when every acceptance criteria row carries evidence or is explicitly marked unverified.
+Phase 2 is done when every acceptance criterion carries evidence or is explicitly marked unverified.
 
 ## Phase 3: Validate
 
