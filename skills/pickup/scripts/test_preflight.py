@@ -9,7 +9,9 @@ the default branch") are exactly the ones a stub would answer by restating the
 test's own assumption. The `gh` half is patched instead: it needs network and an
 authenticated CLI, and CI has neither.
 """
+import contextlib
 import importlib.util
+import io
 import json
 import os
 import subprocess
@@ -183,6 +185,39 @@ class Codeowners(unittest.TestCase):
         (repo / "CODEOWNERS").write_text("docs/ @docs-team\n")
         result = preflight.codeowners_for(repo, ["skills/pickup/SKILL.md"])
         self.assertEqual(result["owners"], [])
+        self.assertTrue(result["readable"])
+
+    def test_undecodable_file_reports_unreadable_rather_than_no_owners(self):
+        """An empty owner list must mean "no rule matched", never "the file
+        could not be read". Collapsing the two is a silent zero: the run would
+        report nobody owns the code when it simply failed to look."""
+        repo = make_repo()
+        (repo / "CODEOWNERS").write_bytes(b"\xff\xfe* @default-owner\n")
+        result = preflight.codeowners_for(repo, ["skills/pickup/SKILL.md"])
+        self.assertFalse(result["readable"])
+        self.assertEqual(result["owners"], [])
+
+    @unittest.skipIf(
+        hasattr(os, "geteuid") and os.geteuid() == 0,
+        "root reads regardless of mode bits",
+    )
+    def test_unreadable_file_does_not_raise(self):
+        repo = make_repo()
+        owners_file = repo / "CODEOWNERS"
+        owners_file.write_text("* @default-owner\n")
+        owners_file.chmod(0o000)
+        try:
+            result = preflight.codeowners_for(repo, ["skills/pickup/SKILL.md"])
+        finally:
+            owners_file.chmod(0o644)
+        self.assertFalse(result["readable"])
+        self.assertEqual(result["owners"], [])
+
+    def test_absent_file_counts_as_readable(self):
+        """No CODEOWNERS is a known state, not a failure to read one."""
+        repo = make_repo()
+        result = preflight.codeowners_for(repo, ["skills/pickup/SKILL.md"])
+        self.assertTrue(result["readable"])
 
 
 class FindRunPr(unittest.TestCase):
@@ -337,6 +372,14 @@ class Cli(unittest.TestCase):
     def test_missing_required_argument_is_a_usage_error(self):
         code, _ = self.run_main(["--cwd", "/tmp"])
         self.assertEqual(code, preflight.USAGE_ERROR)
+
+    def test_help_exits_zero(self):
+        """`--help` is a successful request for help, not a usage error.
+        argparse already encodes that distinction in the code it raises with;
+        flattening every SystemExit discards it."""
+        with contextlib.redirect_stdout(io.StringIO()):
+            code = preflight.main(["--help"])
+        self.assertEqual(code, preflight.CLEAR)
 
 
 if __name__ == "__main__":

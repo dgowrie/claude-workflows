@@ -147,7 +147,12 @@ def _codeowners_matches(pattern, path):
 
 
 def codeowners_for(repo_root, paths):
-    """Owners of `paths`, unioned, using last-match-wins per path."""
+    """Owners of `paths`, unioned, using last-match-wins per path.
+
+    `readable` separates "no rule matched" from "the file could not be read".
+    Collapsing the two into an empty owner list is a silent zero: the run would
+    report that nobody owns the code when it had simply failed to look.
+    """
     root = Path(repo_root)
     location = None
     for candidate in CODEOWNERS_LOCATIONS:
@@ -155,10 +160,15 @@ def codeowners_for(repo_root, paths):
             location = candidate
             break
     if location is None:
-        return {"file": None, "owners": []}
+        return {"file": None, "owners": [], "readable": True}
+
+    try:
+        contents = (root / location).read_text()
+    except (OSError, UnicodeDecodeError):
+        return {"file": str(root / location), "owners": [], "readable": False}
 
     rules = []
-    for line in (root / location).read_text().splitlines():
+    for line in contents.splitlines():
         line = line.split("#", 1)[0].strip()
         if not line:
             continue
@@ -177,7 +187,7 @@ def codeowners_for(repo_root, paths):
             if owner not in owners:
                 owners.append(owner)
 
-    return {"file": str(root / location), "owners": owners}
+    return {"file": str(root / location), "owners": owners, "readable": True}
 
 
 def gh_authenticated(cwd):
@@ -254,7 +264,7 @@ def collect(cwd, handoff_doc, paths=None):
     owners = (
         codeowners_for(facts["repo_root"], paths)
         if facts["repo_root"] and paths
-        else {"file": None, "owners": []}
+        else {"file": None, "owners": [], "readable": True}
     )
 
     result = dict(facts)
@@ -277,8 +287,10 @@ def main(argv=None):
     parser.add_argument("--paths", nargs="*", default=[])
     try:
         args = parser.parse_args(argv)
-    except SystemExit:
-        return USAGE_ERROR
+    except SystemExit as exit_signal:
+        # argparse exits 0 for --help and 2 for a bad argument. Preserve that
+        # distinction: --help is a successful request, not a usage error.
+        return USAGE_ERROR if exit_signal.code else CLEAR
 
     result = collect(args.cwd, args.handoff_doc, args.paths)
     print(json.dumps(result, indent=2, sort_keys=True))
