@@ -196,6 +196,13 @@ def gh_authenticated(cwd):
 
 
 def gh_open_prs(cwd):
+    """Open PRs, or None when the lookup failed.
+
+    The distinction carries weight downstream: a resume that cannot see its own
+    pull request opens a duplicate one, unattended. `gh pr list --json` prints
+    `[]` for a repo with nothing open, so silence means failure rather than
+    emptiness.
+    """
     code, out = run(
         [
             "gh", "pr", "list",
@@ -206,11 +213,12 @@ def gh_open_prs(cwd):
         cwd,
     )
     if code != 0 or not out.strip():
-        return []
+        return None
     try:
-        return json.loads(out)
+        parsed = json.loads(out)
     except ValueError:
-        return []
+        return None
+    return parsed if isinstance(parsed, list) else None
 
 
 def find_run_pr(prs, handoff_doc):
@@ -259,7 +267,15 @@ def collect(cwd, handoff_doc, paths=None):
                       "the run could not open or update a PR.",
         })
 
-    existing_pr = find_run_pr(gh_open_prs(cwd), handoff_doc) if authenticated else None
+    open_prs = gh_open_prs(cwd) if authenticated else None
+    if authenticated and open_prs is None:
+        blockers.append({
+            "code": "pr-lookup-failed",
+            "detail": "`gh` is authenticated but could not list open pull "
+                      "requests, so an existing run PR cannot be ruled out. "
+                      "Proceeding would risk opening a duplicate.",
+        })
+    existing_pr = find_run_pr(open_prs, handoff_doc) if open_prs else None
 
     owners = (
         codeowners_for(facts["repo_root"], paths)

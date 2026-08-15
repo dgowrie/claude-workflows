@@ -220,6 +220,35 @@ class Codeowners(unittest.TestCase):
         self.assertTrue(result["readable"])
 
 
+class GhOpenPrs(unittest.TestCase):
+    """`None` means the lookup failed; `[]` means the repo genuinely has no open
+    PRs. Collapsing them is a silent zero with an outward-facing consequence: a
+    resume that cannot see its own PR opens a duplicate one."""
+
+    def test_valid_empty_list_is_empty(self):
+        with mock.patch.object(preflight, "run", return_value=(0, "[]\n")):
+            self.assertEqual(preflight.gh_open_prs("."), [])
+
+    def test_populated_list_is_parsed(self):
+        payload = '[{"number": 3, "body": "x"}]'
+        with mock.patch.object(preflight, "run", return_value=(0, payload)):
+            self.assertEqual(preflight.gh_open_prs(".")[0]["number"], 3)
+
+    def test_command_failure_is_none(self):
+        with mock.patch.object(preflight, "run", return_value=(1, "")):
+            self.assertIsNone(preflight.gh_open_prs("."))
+
+    def test_unparsable_output_is_none(self):
+        with mock.patch.object(preflight, "run", return_value=(0, "not json")):
+            self.assertIsNone(preflight.gh_open_prs("."))
+
+    def test_empty_output_is_none(self):
+        """`gh pr list --json` prints `[]` when there is nothing. Silence means
+        something went wrong, so it is a failure rather than an empty result."""
+        with mock.patch.object(preflight, "run", return_value=(0, "")):
+            self.assertIsNone(preflight.gh_open_prs("."))
+
+
 class FindRunPr(unittest.TestCase):
     """Resume detection. Keyed on the handoff document a PR body cites, not on
     the branch name, so a run resumes even from a differently named branch."""
@@ -326,6 +355,33 @@ class Resume(unittest.TestCase):
              mock.patch.object(preflight, "gh_authenticated", return_value=True):
             result = preflight.collect(repo, make_handoff_doc())
         self.assertIsNone(result["existing_pr"])
+
+    def test_failed_lookup_blocks_rather_than_reporting_no_pr(self):
+        """Proceeding on a failed lookup would open a second PR for a run that
+        already has one, unattended and outward-facing."""
+        repo = make_repo()
+        with mock.patch.object(preflight, "gh_open_prs", return_value=None), \
+             mock.patch.object(preflight, "gh_authenticated", return_value=True):
+            result = preflight.collect(repo, make_handoff_doc())
+        self.assertIn("pr-lookup-failed", [b["code"] for b in result["blockers"]])
+        self.assertIsNone(result["existing_pr"])
+
+    def test_genuinely_empty_lookup_does_not_block(self):
+        repo = make_repo()
+        with mock.patch.object(preflight, "gh_open_prs", return_value=[]), \
+             mock.patch.object(preflight, "gh_authenticated", return_value=True):
+            result = preflight.collect(repo, make_handoff_doc())
+        self.assertNotIn("pr-lookup-failed", [b["code"] for b in result["blockers"]])
+
+    def test_unauthenticated_gh_does_not_also_report_lookup_failure(self):
+        """One root cause, one blocker. The gh-unauthenticated blocker already
+        explains why no lookup happened."""
+        repo = make_repo()
+        with mock.patch.object(preflight, "gh_authenticated", return_value=False):
+            result = preflight.collect(repo, make_handoff_doc())
+        codes = [b["code"] for b in result["blockers"]]
+        self.assertIn("gh-unauthenticated", codes)
+        self.assertNotIn("pr-lookup-failed", codes)
 
     def test_pr_lookup_skipped_when_gh_unauthenticated(self):
         """No auth means no reliable answer about existing PRs. Reporting null
