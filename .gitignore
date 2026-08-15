@@ -4,3 +4,6 @@ skills/slack-plugin-release-post/
 # Claude Code harness-local scratch: per-machine settings.local.json, the
 # .cc-writes staging dir, and Claude-managed git worktrees. Never committed.
 .claude/
+
+# Per-user editor config (e.g. Peacock window color). Never committed.
+.vscode/
