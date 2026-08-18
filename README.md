@@ -100,6 +100,7 @@ Hook scripts in `config/hooks/` are symlinked into `~/.claude/hooks/`. Unlike sk
 
 - [`block-em-dash.sh`](config/hooks/block-em-dash.sh) - PreToolUse hook enforcing the no-em-dash rule. Requires matcher `Write|Edit|Bash` in `settings.json` so it inspects the inline Bash command string (`gh`/`git` titles, commit subjects), not just `Write`/`Edit`. Tested via [`block-em-dash.test.sh`](config/hooks/block-em-dash.test.sh) (`bash config/hooks/block-em-dash.test.sh`).
 - [`block-claude-attribution.sh`](config/hooks/block-claude-attribution.sh) - PreToolUse hook blocking Claude attribution footers and `Co-Authored-By` trailers.
+- [`prune-mattpocock-duplicates.sh`](config/hooks/prune-mattpocock-duplicates.sh) - SessionStart hook (no matcher). Deletes the 6 auto-firing `mattpocock-skills` plugin skills that duplicate my customized personal skills, so Claude only sees mine. Runs every session, so it self-heals after a plugin update re-materializes the bundle. Installed for the plugin's `teach` skill; `skillOverrides` cannot target plugin skills, hence the prune approach.
 
 Because the matcher wiring lives in untracked `settings.json`, a committed hook will not fire for anyone who has not mirrored the matcher locally. Tracking that drift is [#24](https://github.com/dgowrie/claude-workflows/issues/24).
 
