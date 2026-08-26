@@ -115,6 +115,7 @@ Go straight to `dangerouslyDisableSandbox` for these; don't retry inside sandbox
 - **No `Co-Authored-By` trailers.** No "Generated with Claude Code" attribution. Anywhere.
 - **Discrete commits per PR.** Map to logical units: config/types, tests, implementation, lint autofix.
 - **Lint autofix: always its own commit.**
+- **Formatter-touched lines you didn't author = separate commit.** After `make fmt` / `prettier --write` / any autofix, run `git diff` **before staging**. Any hunk on a line you did not edit is lint-only: stage it with `git add -p` into its own `style:`/lint commit. Never `git add <whole file>` a formatter-modified file blind - that is exactly how lint autofix leaks into a feature/docs commit.
 - **Never commit to default branch.** Always feature branch. Ask to confirm if on default branch.
 - **Start from fresh main.** Fetch, update, branch before new work.
 - **Never amend with open PR.** Creates force-push, loses review context. Always new commit.
