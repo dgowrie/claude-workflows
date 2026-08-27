@@ -75,6 +75,8 @@ Changes to a skill file in the repo are immediately live — no copy or sync ste
 - [`/domain-modeling`](skills/domain-modeling/SKILL.md) - build and sharpen a project's domain model (`CONTEXT.md` glossary, `docs/adr/` decisions); companion to `/improve-codebase-architecture`
 - [`/grilling`](skills/grilling/SKILL.md) - Matt Pocock's decision-tree grilling loop, kept distinct from the customized `/grill-me` so `/improve-codebase-architecture` can call it by name
 - [`/writing-for-agents`](skills/writing-for-agents/SKILL.md) - Matt Pocock's reference for writing any document an agent consumes (skills, `AGENTS.md`, `CLAUDE.md`): context pointers, the two loads, information hierarchy, leading words, pruning. Copied verbatim from [mattpocock/skills](https://github.com/mattpocock/skills/tree/main/skills/productivity/writing-for-agents); model-invoked, so it fires on its own when you edit a skill or `CLAUDE.md`
+- [`/handoff`](skills/handoff/SKILL.md) - compact the current session into a handoff document a fresh session can pick up
+- [`/pickup`](skills/pickup/SKILL.md) - the other end of `/handoff`: triage a handoff document, then implement, validate, and drive the review cycle to a reviewed PR. Three modes (`afk`, `semi`, `hitl`); hard-stops on a blocker and halts on a mode mismatch. Ships with `scripts/preflight.py`
 
 ### Rules
 

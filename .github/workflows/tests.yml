@@ -1,25 +1,29 @@
 name: tests
 
-# Runs the pr-review-bot-loop detector's tests, whose exit codes decide whether
-# a review loop terminates. Other executable logic in the repo is not covered
-# here: config/hooks/ has its own test script (block-em-dash.test.sh) that
-# nothing runs automatically, and work-next-task/scripts/ralph.sh has no tests.
+# Runs the tests for the repo's decision-making scripts: the pr-review-bot-loop
+# detector, whose exit codes decide whether a review loop terminates, and the
+# pickup preflight, whose exit code decides whether an unattended run starts at
+# all. Other executable logic in the repo is not covered here: config/hooks/ has
+# its own test script (block-em-dash.test.sh) that nothing runs automatically,
+# and work-next-task/scripts/ralph.sh has no tests.
 
 on:
   pull_request:
     paths:
-      # Matches exactly what the run step discovers. A broader trigger would
+      # Matches exactly what the run steps discover. A broader trigger would
       # give a future skill's script a green run that tested nothing, which
       # reads as coverage; add that skill's directory here instead.
       - 'skills/pr-review-bot-loop/scripts/**'
+      - 'skills/pickup/scripts/**'
       - '.github/workflows/tests.yml'
   push:
     branches: [main]
     paths:
-      # Matches exactly what the run step discovers. A broader trigger would
+      # Matches exactly what the run steps discover. A broader trigger would
       # give a future skill's script a green run that tested nothing, which
       # reads as coverage; add that skill's directory here instead.
       - 'skills/pr-review-bot-loop/scripts/**'
+      - 'skills/pickup/scripts/**'
       - '.github/workflows/tests.yml'
   workflow_dispatch:
 
@@ -43,3 +47,6 @@ jobs:
       # Offline cases only. The SIGNALS_LIVE half asserts against real PRs
       # through the API, which is a pre-push check rather than a CI gate.
       - run: python3 -m unittest discover -s skills/pr-review-bot-loop/scripts -v
+      # Fully offline. The fixtures build throwaway repositories with an inline
+      # identity and signing disabled, so the runner needs no git configuration.
+      - run: python3 -m unittest discover -s skills/pickup/scripts -v
