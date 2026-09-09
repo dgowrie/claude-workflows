@@ -62,35 +62,54 @@ query($owner:String!, $repo:String!, $number:Int!) {
 # re-request response. A filter built by equality against any one of them
 # silently never matches, which presents as a review that never lands.
 COPILOT = re.compile(r"copilot", re.IGNORECASE)
-# The count lives in the <summary>. Copilot has used at least two labels:
-# "Comments suppressed due to low confidence (N)" and "Suppressed comments (N)".
-# Match the word "suppress" plus a parenthesised count rather than either fixed
-# phrase, or a label change reports zero and the loop terminates on findings it
-# never read. Expect a third label.
-SUPPRESSED_SUMMARY = re.compile(r"suppress\w*", re.IGNORECASE)
-COUNT_IN_SUMMARY = re.compile(r"\((\d+)\)")
-# Gate on the summary text: "Show a summary per file" is a benign <details> block
-# that coexists with the suppressed block in the same body.
+# Copilot marks withheld findings with a labelled, parenthesised count, but it
+# has moved that label between surfaces. It has been the <summary> text
+# ("Suppressed comments (N)", "Comments suppressed due to low confidence (N)")
+# and, more recently, a heading inside a generic "<summary>Review details</summary>"
+# block. Match the label plus its count anywhere in the <details> block, not only
+# in the <summary>, or the newer layout parses as "no suppressed block", returns
+# CLEAN, and the loop terminates on findings it never read.
 #
-# The container is drift-hardened for the same reason the label is. Attributes
-# (<details open>) or different casing would otherwise parse as "no suppressed
-# block", which returns CLEAN and terminates the loop on withheld findings. The
-# floor of matching HTML with a regex is a quoted attribute containing ">"; that
-# is not worth chasing, and it fails toward CLEAN, so the count mismatch below is
-# what catches it.
+# The label is matched tightly: the "suppressed comments" / "comments suppressed"
+# phrase adjacent to a parenthesised count, never a bare /suppress/. Copilot's
+# per-file overview restates each changed file's description, so a PR that is
+# *about* suppressing something (e.g. a global error alert) puts the word
+# "suppress" in an otherwise clean block; a loose match fires on it. Expect the
+# phrasing to drift again, so the no-count variant still flags an unparsable
+# label as undeclared rather than skipping it.
+SUPPRESSED_LABEL = re.compile(
+    r"(?:comments?\s+suppressed|suppressed\s+comments?)[^\n(]*\((\d+)\)",
+    re.IGNORECASE,
+)
+SUPPRESSED_LABEL_NO_COUNT = re.compile(
+    r"comments?\s+suppressed|suppressed\s+comments?", re.IGNORECASE
+)
+# The <details> container is drift-hardened for the same reason. Attributes
+# (<details open>) or different casing would otherwise parse as "no block", which
+# returns CLEAN on withheld findings. The floor of matching HTML with a regex is a
+# quoted attribute containing ">"; not worth chasing, and it fails toward CLEAN,
+# so the count mismatch below is what catches it.
 #
 # Deliberately NOT here: a body-level backstop treating /suppress/i anywhere in
 # the body as triage. Copilot's overview table restates each changed file's
 # description, so on a PR that mentions suppression the phrase appears in a
 # genuinely clean review body. That backstop was measured firing on this repo's
 # own clean rounds, which is a loop with no fixed point: worse than the early
-# termination it would be trying to prevent.
+# termination it would be trying to prevent. Scoping the label to a <details>
+# block and requiring the tight phrase plus count is what keeps a
+# "suppress"-mentioning PR from self-triaging.
 DETAILS_BLOCK = re.compile(
     r"<details[^>]*>\s*<summary[^>]*>(?P<summary>.*?)</summary>(?P<inner>.*?)</details>",
     re.DOTALL | re.IGNORECASE,
 )
-# Inside the block each finding is "**path/to/file.ext**" followed by prose.
-FINDING = re.compile(r"\*\*(?P<file>[^*\n]+?)\*\*\s*(?P<text>.*?)(?=\n\s*\*\*|\Z)", re.DOTALL)
+# Inside the block each real finding is a bold file path ("**path/to/file.ext**"
+# or "**path/to/file.ext:line**"). Requiring a dotted extension separates the
+# findings from the block's own bold metadata rows ("**Files reviewed:**",
+# "**Previously missed (N)**"), which share the bold markup but are not paths.
+FINDING = re.compile(
+    r"\*\*(?P<file>[^\s*]+\.[A-Za-z0-9]+(?::\d+)?)\*\*\s*(?P<text>.*?)(?=\n\s*\*\*|\Z)",
+    re.DOTALL,
+)
 
 
 def parse_suppressed(body):
@@ -107,19 +126,23 @@ def parse_suppressed(body):
     labels = []
     undeclared = False
     for block in DETAILS_BLOCK.finditer(body):
-        summary = block.group("summary")
-        if not SUPPRESSED_SUMMARY.search(summary):
-            continue
-        labels.append(" ".join(summary.split()))
-        match = COUNT_IN_SUMMARY.search(summary)
-        if match:
-            count = (count or 0) + int(match.group(1))
-        else:
+        # The label may live in the <summary> (older layout) or in the block body
+        # (the "Review details" layout), so search the whole block, not the summary.
+        text = block.group(0)
+        with_count = SUPPRESSED_LABEL.search(text)
+        no_count = SUPPRESSED_LABEL_NO_COUNT.search(text)
+        if with_count:
+            labels.append(" ".join(with_count.group(0).split()))
+            count = (count or 0) + int(with_count.group(1))
+        elif no_count:
+            labels.append(" ".join(no_count.group(0).split()))
             undeclared = True
+        else:
+            continue
         for finding in FINDING.finditer(block.group("inner")):
-            text = " ".join(finding.group("text").split())
-            if text:
-                findings.append((finding.group("file").strip(), text))
+            finding_text = " ".join(finding.group("text").split())
+            if finding_text:
+                findings.append((finding.group("file").strip(), finding_text))
     return count, findings, labels, undeclared
 
 

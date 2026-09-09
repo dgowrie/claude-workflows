@@ -171,12 +171,18 @@ It is three-state. Collapsing it to a boolean is a bug in opposite directions.
 - **An unparsable count is triage-required.** Silent-zero is the exact failure the signal exists to
   prevent, so a parser that cannot read the count reports that, never zero.
 
-Two constraints hold the parser together, both live in `copilot-signals.py`, and both were measured
-by running it rather than by reading it. **Match `suppress` plus a parenthesised count**: Copilot has
+Three constraints hold the parser together, all live in `copilot-signals.py`, and all were measured
+by running it rather than by reading it. **Match the label plus a parenthesised count**: Copilot has
 used at least two labels (`Comments suppressed due to low confidence (N)` and `Suppressed comments
-(N)`), so a detector keyed to either literal phrase under-reports on the other, and expect a third.
-**Gate on the summary text before parsing the block**: `Show a summary per file` is a benign
-`<details>` block living in the same body.
+(N)`), so a detector keyed to either literal phrase under-reports on the other; expect a third, and
+flag an unparsable label as undeclared rather than skipping it. **Match the label anywhere in the
+`<details>` block, not only in the `<summary>`**: Copilot moved the labelled count out of the summary
+into a heading inside a generic `<summary>Review details</summary>` block, and a detector that gated
+on the summary read the newer layout as clean and terminated the loop on a withheld finding. **Keep
+the label tight, not a bare `suppress`**: Copilot's per-file overview and the benign `Show a summary
+per file` block restate each changed file's description, so a PR that is *about* suppressing
+something puts the word in an otherwise clean block; the tight `suppressed comments` / `comments
+suppressed` phrase adjacent to a count, scoped to a `<details>` block, is what excludes it.
 
 **Validate a detector against a known-positive PR, and across a state transition.** Both parser
 traps and both scoping traps were found by running the thing against PRs whose answers were already

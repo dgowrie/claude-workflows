@@ -58,6 +58,38 @@ OLD_LABEL = (
     "**src/a.py** one\n**src/b.py** two\n**src/c.py** three\n</details>"
 )
 BENIGN = "<details><summary>Show a summary per file</summary>\n**src/a.py** fine\n</details>"
+# The current Copilot layout: a generic "Review details" <summary> with the
+# labelled count as a heading inside the block, not in the summary. The
+# summary-only gate read this as clean and terminated the loop on the withheld
+# finding; this is the regression these cases lock down.
+REVIEW_DETAILS_SUPPRESSED = (
+    "### Changes recommended\n\n"
+    "The tooltip text reads like a total while the metric is a rate series.\n\n"
+    "<details>\n<summary>Review details</summary>\n\n"
+    "### Suppressed comments (1)\n\n"
+    "**Previously missed (1)** - in code that has not changed since the last review.\n\n"
+    "**src/components/FeatureCard/index.tsx:35**\n"
+    "* The prop comment says space-between but the layout uses marginLeft:auto.\n\n"
+    "- **Files reviewed:** 16/16 changed files\n"
+    "- **Comments generated:** 1\n"
+    "- **Review effort level:** Lite\n"
+    "</details>"
+)
+# A clean review in the same layout whose prose and per-file summary both mention
+# "suppress" (the PR is about suppressing an alert) but which withholds nothing.
+# The tight label plus <details> scoping must keep this clean, or the loop never
+# terminates on a suppress-mentioning PR.
+REVIEW_DETAILS_CLEAN_MENTIONS_SUPPRESS = (
+    "### Looks good\n\n"
+    "This PR makes the background query suppress the global error alert.\n\n"
+    "<details>\n<summary>Review details</summary>\n\n"
+    "- **Files reviewed:** 16/16 changed files\n"
+    "- **Comments generated:** 0\n"
+    "</details>\n"
+    "<details>\n<summary>Show a summary per file</summary>\n\n"
+    "**src/hooks/use-x.ts** Now suppresses the global error alert on failure.\n"
+    "</details>"
+)
 
 
 def review(oid, inline=0, body="", when="2026-01-01T00:00:00Z",
@@ -139,6 +171,19 @@ class ClassificationTests(unittest.TestCase):
 
     def test_older_label_variant_requires_triage(self):
         self.assertVerdict([review(HEAD, body=OLD_LABEL)], signals.TRIAGE_REQUIRED)
+
+    def test_review_details_layout_requires_triage(self):
+        """The current layout: the labelled count is a heading inside a generic
+        "Review details" block, not the <summary>. The summary-only gate read this
+        as clean and terminated the loop on a withheld finding."""
+        self.assertVerdict([review(HEAD, body=REVIEW_DETAILS_SUPPRESSED)],
+                           signals.TRIAGE_REQUIRED)
+
+    def test_review_details_clean_body_mentioning_suppress_stays_clean(self):
+        """The tight label plus <details> scoping keeps a PR that is *about*
+        suppressing something clean when it actually withholds nothing."""
+        self.assertVerdict([review(HEAD, body=REVIEW_DETAILS_CLEAN_MENTIONS_SUPPRESS)],
+                           signals.CLEAN)
 
     def test_author_review_artifacts_are_not_verdicts(self):
         """Our own :zap: thread replies create empty COMMENTED reviews."""
@@ -349,6 +394,28 @@ class ParserTests(unittest.TestCase):
         count, findings, _, _ = signals.parse_suppressed(BENIGN + "\n" + SUPPRESSED_TWO)
         self.assertEqual(count, 2)
         self.assertEqual(len(findings), 2)
+
+    def test_parses_label_inside_review_details_body(self):
+        """The label is a heading in the block body, not the <summary>."""
+        count, findings, labels, undeclared = signals.parse_suppressed(REVIEW_DETAILS_SUPPRESSED)
+        self.assertEqual(count, 1)
+        self.assertFalse(undeclared)
+        self.assertTrue(labels)
+        self.assertEqual([path for path, _ in findings],
+                         ["src/components/FeatureCard/index.tsx:35"])
+
+    def test_bold_metadata_rows_are_not_findings(self):
+        """**Files reviewed:** and **Previously missed (N)** share the bold markup
+        with the file paths but are not paths, so they must not be counted."""
+        _, findings, _, _ = signals.parse_suppressed(REVIEW_DETAILS_SUPPRESSED)
+        self.assertEqual(len(findings), 1)
+
+    def test_review_details_mentioning_suppress_is_not_suppressed(self):
+        count, findings, labels, _ = signals.parse_suppressed(
+            REVIEW_DETAILS_CLEAN_MENTIONS_SUPPRESS)
+        self.assertIsNone(count)
+        self.assertEqual(findings, [])
+        self.assertEqual(labels, [])
 
 
 class ArgumentTests(unittest.TestCase):
