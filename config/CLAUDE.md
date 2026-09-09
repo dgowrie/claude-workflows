@@ -84,6 +84,7 @@ For each issue: describe with file/line references, present 2-3 options (includi
 - Small, single-responsibility functions
 - Comments explain **why**, not **what**. Only when: purpose is non-obvious, deviating from standard approach, documenting a gotcha that can't be eliminated via code/types.
 - Future work: `// TODO: description (#issue)`. Always greppable `TODO` prefix.
+- **No bare issue references (`#123`) in code comments** outside `// TODO(#issue)` markers. Keep the *why*; let `git blame`/PR history surface the issue linkage. Source-file citations (`foo.go:42`) are fine - they're evidence, not issue refs.
 - **Markdown tables:** spaces on both sides of every `|` separator (markdownlint MD060).
 
 ## Tool Permissions and Sandbox
