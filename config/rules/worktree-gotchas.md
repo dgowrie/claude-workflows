@@ -12,7 +12,7 @@ Read/Write/Edit resolve absolute paths literally. A main-checkout path like `/�
 ## The session is hard-isolated to its worktree
 
 - Cannot fast-forward local `main` (it's checked out in the shared checkout): `git fetch . origin/main:main` fails ("refusing to fetch into branch 'main' checked out at ..."), `git -C <main-checkout> ...` is refused by the harness ("must target its own worktree"), and even a user `!`-prefixed command is blocked. Do the `main` fast-forward from a shell OUTSIDE the worktree.
-- `git -C <other-path>` is always refused, regardless of target.
+- `git -C <path>` is refused only when `<path>` is **another checkout of this worktree's own repo** (the shared main checkout, or a sibling worktree): "must target its own worktree". It is NOT blanket-refused by target: `git -C` against a **genuinely separate repo** (a different `.git`) works normally - full fetch / `worktree add` / commit / push / PR cycles all run fine there (verified 2026-09).
 - Compound Bash commands are refused when the harness can't prove they stay in-worktree ("too complex to verify") - e.g. `cp …; …; >$TMPDIR/x.log` or `for i in $(seq …)` loops with redirects. Split into plain single-purpose commands, and prefer writing logs under the scratchpad absolute path over `$TMPDIR` redirects.
 
 Why: these look like git errors or flaky tool failures but are the worktree-isolation guard.
