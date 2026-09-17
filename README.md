@@ -91,6 +91,7 @@ Rules in `config/rules/` are symlinked into `~/.claude/rules/`, making them glob
 - [Epistemic Honesty](config/rules/epistemic-honesty.md) — label verified vs inferred vs assumed; self-challenge before committing to conclusions
 - [Temp-File Path Discipline](config/rules/temp-file-path-discipline.md) - write and read the same absolute path for file-consuming commands (`--body-file`, `-F`, `@file`); never assume `$TMPDIR` is the scratchpad; verify outward-facing artifacts after creation
 - [Silent Zeros](config/rules/silent-zeros.md) - a failure that renders as an empty result reads as success; make failure representable in the return type, fail closed in gates, and force the failure in a test
+- [Write New-File Collision](config/rules/write-new-file-collision.md) - verify a path is empty before Write-creating; a missing grep hit is not proof of absence; if it exists, Read then Edit rather than overwrite
 
 ### Hooks
 
