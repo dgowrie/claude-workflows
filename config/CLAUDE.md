@@ -100,6 +100,7 @@ Use `dangerouslyDisableSandbox: true` **only** for:
 
 - **`gh` CLI commands** - corporate proxy TLS causes `x509: OSStatus -26276`
 - **`git push`, `git fetch`, `git clone`** against `github.com` - sandbox blocks the 1Password SSH agent socket
+- **`yarn` / `corepack` install and JS dev servers** - `corepack` fetches the pinned Yarn into `~/.cache/node/corepack/` (`EPERM mkdir`, outside sandbox-writable paths), and watch/dev servers hit `listen EPERM` on port binds (e.g. LiveReload's `35729`) plus `EPIPE` in forked type-checker children. Run `yarn install` and dev/watch servers (`yarn start`, `yarn dev`) with the sandbox disabled. A production foreground build (`yarn build`) compiles fine inside the sandbox.
 
 Go straight to `dangerouslyDisableSandbox` for these; don't retry inside sandbox first. Do not use it for `curl`, arbitrary HTTP calls, or SSH to non-GitHub hosts without explicit permission.
 
