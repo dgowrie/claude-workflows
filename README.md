@@ -95,6 +95,7 @@ Rules in `config/rules/` are symlinked into `~/.claude/rules/`, making them glob
 - [GitHub API Mechanics](config/rules/github-api-mechanics.md) - non-obvious `gh` REST/GraphQL details: `in_reply_to` field and `PRRT_` vs `PRRC_` node IDs for review threads, native `addSubIssue`, and requesting Copilot via REST `requested_reviewers`
 - [Transitive-Dep CVE Fixes](config/rules/transitive-dep-cve-fixes.md) - run the range test before pinning: a lockfile re-resolution beats a `resolutions`/`overrides` pin whenever the parent ranges already admit the fix
 - [Worktree Gotchas](config/rules/worktree-gotchas.md) - worktree-isolation behaviors that look like stale caches or git errors: file tools need the worktree-prefixed absolute path, and `main` fast-forwards must run outside the worktree
+- [Session-End Housekeeping](config/rules/session-end-housekeeping.md) - at session end, surface leftover worktrees, stale branches, background processes, and temp files with cleanup commands (no destructive action without confirmation); complements the memory audit
 
 ### Hooks
 

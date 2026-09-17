@@ -142,6 +142,7 @@ After pushing to any PR (including drafts), run both concurrently:
 - Accepted: reply `:zap: <commit hash>` plus a brief change/rationale summary. No affirmation prefixes ("good catch", "fair point", "great point", etc.); state what changed and why, nothing else.
 - Rejected: reply `:thought_balloon: <brief rationale>`.
 - Batch trivial fixes; non-trivial gets its own commit.
+- **Address the actionable ask first.** Separate the reviewer's requested change from any incidental premise: act on the request, then correct the premise if it is off (in that order). A technically-correct clarification is not a substitute for the fix and can read as a dismissal, so a reply that only clarifies, with no accept/reject on the underlying ask, is incomplete triage.
 - **Only resolve threads we authored.** Reviewer threads stay open so reviewers can see what was flagged and weigh in. For our threads: resolve after reply is published (if staged as pending, wait until review is submitted).
 - Use `resolveReviewThread` GraphQL mutation; never `minimizeComment`.
 
