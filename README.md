@@ -92,6 +92,9 @@ Rules in `config/rules/` are symlinked into `~/.claude/rules/`, making them glob
 - [Temp-File Path Discipline](config/rules/temp-file-path-discipline.md) - write and read the same absolute path for file-consuming commands (`--body-file`, `-F`, `@file`); never assume `$TMPDIR` is the scratchpad; verify outward-facing artifacts after creation
 - [Silent Zeros](config/rules/silent-zeros.md) - a failure that renders as an empty result reads as success; make failure representable in the return type, fail closed in gates, and force the failure in a test
 - [Write New-File Collision](config/rules/write-new-file-collision.md) - verify a path is empty before Write-creating; a missing grep hit is not proof of absence; if it exists, Read then Edit rather than overwrite
+- [GitHub API Mechanics](config/rules/github-api-mechanics.md) - non-obvious `gh` REST/GraphQL details: `in_reply_to` field and `PRRT_` vs `PRRC_` node IDs for review threads, native `addSubIssue`, and requesting Copilot via REST `requested_reviewers`
+- [Transitive-Dep CVE Fixes](config/rules/transitive-dep-cve-fixes.md) - run the range test before pinning: a lockfile re-resolution beats a `resolutions`/`overrides` pin whenever the parent ranges already admit the fix
+- [Worktree Gotchas](config/rules/worktree-gotchas.md) - worktree-isolation behaviors that look like stale caches or git errors: file tools need the worktree-prefixed absolute path, and `main` fast-forwards must run outside the worktree
 
 ### Hooks
 
