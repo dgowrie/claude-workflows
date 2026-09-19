@@ -1,6 +1,10 @@
 # Skills with internal/private references
 skills/slack-plugin-release-post/
 
+# Skill-sync runtime scratch: per-process claim buckets and manifest dropped
+# by the sync machinery. Transient coordination state, never authored content.
+skills/synced/
+
 # Claude Code harness-local scratch: per-machine settings.local.json, the
 # .cc-writes staging dir, and Claude-managed git worktrees. Never committed.
 .claude/
