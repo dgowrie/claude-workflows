@@ -96,6 +96,7 @@ Rules in `config/rules/` are symlinked into `~/.claude/rules/`, making them glob
 - [Transitive-Dep CVE Fixes](config/rules/transitive-dep-cve-fixes.md) - run the range test before pinning: a lockfile re-resolution beats a `resolutions`/`overrides` pin whenever the parent ranges already admit the fix
 - [Worktree Gotchas](config/rules/worktree-gotchas.md) - worktree-isolation behaviors that look like stale caches or git errors: file tools need the worktree-prefixed absolute path, and `main` fast-forwards must run outside the worktree
 - [Session-End Housekeeping](config/rules/session-end-housekeeping.md) - at session end, surface leftover worktrees, stale branches, background processes, and temp files with cleanup commands (no destructive action without confirmation); complements the memory audit
+- [No Review Artifacts in Shipped Code](config/rules/no-review-artifacts-in-shipped-code.md) - keep review-loop labels (F1/C3), reviewer/process names, and planning jargon (piece 2) out of committed code, comments, and test names; issue/PR numbers stay legitimate; grep the staged diff before committing
 
 ### Hooks
 
