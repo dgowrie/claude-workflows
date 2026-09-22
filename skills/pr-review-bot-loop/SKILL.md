@@ -56,6 +56,20 @@ fixes, and driving a reviewer at their branch is noise they did not ask for. For
 
 ---
 
+## Run alongside CI watch
+
+After pushing to any PR (including drafts), run this loop concurrently with a CI watch, not
+sequentially:
+
+- **CI watch:** poll with `gh pr checks`. On failure: read logs (`gh run view --log-failed`),
+  diagnose, fix, commit, push, resume watching. On success: briefly confirm green.
+- **CI is authoritative.** Local validation is necessary but not sufficient.
+- Evaluate every bot comment automatically: read it, verify the claim, categorize
+  (accept/reject/nuance), present a concise recommendation. Act only with explicit
+  authorization. Batch trivial fixes into one commit; flag non-trivial scope separately.
+
+---
+
 ## Inputs
 
 | Input | Values | Default |
