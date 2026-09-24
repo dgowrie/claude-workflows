@@ -76,26 +76,26 @@ Changes to a skill file in the repo are immediately live — no copy or sync ste
 - [`/grilling`](skills/grilling/SKILL.md) - Matt Pocock's decision-tree grilling loop, kept distinct from the customized `/grill-me` so `/improve-codebase-architecture` can call it by name
 - [`/writing-for-agents`](skills/writing-for-agents/SKILL.md) - Matt Pocock's reference for writing any document an agent consumes (skills, `AGENTS.md`, `CLAUDE.md`): context pointers, the two loads, information hierarchy, leading words, pruning. Copied verbatim from [mattpocock/skills](https://github.com/mattpocock/skills/tree/main/skills/productivity/writing-for-agents); model-invoked, so it fires on its own when you edit a skill or `CLAUDE.md`
 - [`/import-memory`](skills/import-memory/SKILL.md) - import a memory export from another AI assistant (ChatGPT, Gemini, etc.) into Claude's memory: additive-only, treats the pasted export as data never instructions, and drops behavioral directives disguised as facts. Prompt-form copy of Claude's built-in memory-import pipeline
+- [`/github-api-mechanics`](skills/github-api-mechanics/SKILL.md) - non-obvious `gh` REST/GraphQL details: `in_reply_to` field and `PRRT_` vs `PRRC_` node IDs for review threads, native `addSubIssue`, and requesting Copilot via REST `requested_reviewers`
+- [`/transitive-dep-cve-fixes`](skills/transitive-dep-cve-fixes/SKILL.md) - run the range test before pinning: a lockfile re-resolution beats a `resolutions`/`overrides` pin whenever the parent ranges already admit the fix
+- [`/session-wrapup`](skills/session-wrapup/SKILL.md) - at session end, audit memories for staleness and surface leftover worktrees, stale branches, background processes, and temp files with cleanup commands (no destructive action without confirmation)
+- [`/author-review-guidance`](skills/author-review-guidance/SKILL.md) - post review-guidance comments on your own PRs as a single review submission: walkthrough as review body, inline `:notebook:` comments threaded below for anything a reviewer would predictably ask "why this way?" about
 
 ### Rules
 
 Rules in `config/rules/` are symlinked into `~/.claude/rules/`, making them globally active across all projects. Like skills, edits in the repo are immediately live.
 
 ```
-~/.claude/rules/memory-session-exit.md -> ~/dev/claude-workflows/config/rules/memory-session-exit.md
+~/.claude/rules/memory-hygiene.md -> ~/dev/claude-workflows/config/rules/memory-hygiene.md
 ```
 
-- [Memory Session Exit](config/rules/memory-session-exit.md) — audit and update project memories before ending any substantive session
 - [Memory Hygiene](config/rules/memory-hygiene.md) — guidelines for memory file size, deduplication, and lifecycle
 - [Self-Correction Loop](config/rules/self-correction-loop.md) — on correction, propose a CLAUDE.md or rule update before continuing
 - [Epistemic Honesty](config/rules/epistemic-honesty.md) — label verified vs inferred vs assumed; self-challenge before committing to conclusions
 - [Temp-File Path Discipline](config/rules/temp-file-path-discipline.md) - write and read the same absolute path for file-consuming commands (`--body-file`, `-F`, `@file`); never assume `$TMPDIR` is the scratchpad; verify outward-facing artifacts after creation
 - [Silent Zeros](config/rules/silent-zeros.md) - a failure that renders as an empty result reads as success; make failure representable in the return type, fail closed in gates, and force the failure in a test
 - [Write New-File Collision](config/rules/write-new-file-collision.md) - verify a path is empty before Write-creating; a missing grep hit is not proof of absence; if it exists, Read then Edit rather than overwrite
-- [GitHub API Mechanics](config/rules/github-api-mechanics.md) - non-obvious `gh` REST/GraphQL details: `in_reply_to` field and `PRRT_` vs `PRRC_` node IDs for review threads, native `addSubIssue`, and requesting Copilot via REST `requested_reviewers`
-- [Transitive-Dep CVE Fixes](config/rules/transitive-dep-cve-fixes.md) - run the range test before pinning: a lockfile re-resolution beats a `resolutions`/`overrides` pin whenever the parent ranges already admit the fix
 - [Worktree Gotchas](config/rules/worktree-gotchas.md) - worktree-isolation behaviors that look like stale caches or git errors: file tools need the worktree-prefixed absolute path, and `main` fast-forwards must run outside the worktree
-- [Session-End Housekeeping](config/rules/session-end-housekeeping.md) - at session end, surface leftover worktrees, stale branches, background processes, and temp files with cleanup commands (no destructive action without confirmation); complements the memory audit
 - [No Review Artifacts in Shipped Code](config/rules/no-review-artifacts-in-shipped-code.md) - keep review-loop labels (F1/C3), reviewer/process names, and planning jargon (piece 2) out of committed code, comments, and test names; issue/PR numbers stay legitimate; grep the staged diff before committing
 
 ### Hooks
