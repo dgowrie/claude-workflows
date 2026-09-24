@@ -239,7 +239,7 @@ Note: the pull number is required in the path. The comment-level GET endpoint (`
 
 ### Resolving threads after reply
 
-**Only resolve threads we authored.** Reply to reviewer and bot threads, then leave them open. An open thread keeps the flagged concern and our response visible so the reviewer can weigh in; resolving it on their behalf buries the exchange. This holds even when the reply is a definitive rejection. See "PR Review Conventions" in the global `~/.claude/CLAUDE.md` (`config/CLAUDE.md` in the `claude-workflows` repo).
+**Only resolve threads we authored.** Reply to reviewer and bot threads, then leave them open. An open thread keeps the flagged concern and our response visible so the reviewer can weigh in; resolving it on their behalf buries the exchange. This holds even when the reply is a definitive rejection. See the reply and thread-resolution conventions in the `pr-review-batching` skill.
 
 For our own threads, timing depends on how the reply was posted:
 

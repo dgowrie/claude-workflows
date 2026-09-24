@@ -274,8 +274,9 @@ the round cap and the stopping condition.
 
 ## Notes
 
-- Global conventions (PR Review Conventions, TDD, Definition of Done, commit and dash rules) live in
-  the global `CLAUDE.md` and `~/.claude/rules/`. This skill obeys them and does not restate them.
+- Global conventions (TDD, Definition of Done, commit and dash rules) live in the global
+  `CLAUDE.md` and `~/.claude/rules/`; PR reply and thread-resolution conventions live in the
+  `pr-review-batching` skill. This skill obeys them and does not restate them.
 - Related: `/pr-review` (find and format), `/pr-review-batching` (stage, never publish),
   `agents/pr-code-reviewer.md` (the subagent both phases dispatch),
   `config/rules/epistemic-honesty.md` (the rule this derives from).

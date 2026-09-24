@@ -259,7 +259,7 @@ on the PR rather than in session memory, and a fresh session picks the loop up m
 
 ### Thread hygiene
 
-Reply in the format the global PR Review Conventions define. Replies need the **numeric** comment
+Reply in the format the `pr-review-batching` skill's reply conventions define. Replies need the **numeric** comment
 id, not the GraphQL node id, which 404s: `POST /pulls/{n}/comments/{numericId}/replies`.
 
 **Leave every bot thread open.** An open thread keeps the finding and your response visible for the
@@ -343,9 +343,10 @@ head.
 
 ## Notes
 
-- Global conventions (PR Review Conventions, TDD, Definition of Done, commit and dash rules) live in
-  the global `CLAUDE.md` and `~/.claude/rules/`. This skill obeys them and points at them rather
-  than copying them. The one repetition it does carry is deliberate: leaving bot threads open is
-  restated here because driving toward "clean" is exactly the context that tempts you past it.
+- Global conventions (TDD, Definition of Done, commit and dash rules) live in the global
+  `CLAUDE.md` and `~/.claude/rules/`; PR reply and thread-resolution conventions live in the
+  `pr-review-batching` skill. This skill obeys them and points at them rather than copying them.
+  The one repetition it does carry is deliberate: leaving bot threads open is restated here
+  because driving toward "clean" is exactly the context that tempts you past it.
 - Related: `/pr-review` (find and format), `/pr-review-adversarial` (validate findings),
   `/pr-review-batching` (stage, never publish).
