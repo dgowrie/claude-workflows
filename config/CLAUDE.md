@@ -126,11 +126,9 @@ Go straight to `dangerouslyDisableSandbox` for these; don't retry inside sandbox
 
 ## PR Review Workflows
 
-Migrated 2026-09-22 as part of a /doctor context cleanup (task-specific workflows, only needed
-during PR review, not always):
 - Post-push CI watch and bot review triage, and the addressing-feedback reply/thread-resolution
-  conventions: folded into the `pr-review-bot-loop` and `pr-review-batching` skills.
-- Author review guidance (walkthrough + inline `:notebook:` comments on your own PRs): moved to
+  conventions: live in the `pr-review-bot-loop` and `pr-review-batching` skills.
+- Author review guidance (walkthrough + inline `:notebook:` comments on your own PRs): lives in
   the `author-review-guidance` skill.
 
 ## Session and Dependency Checks
