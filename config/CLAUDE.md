@@ -124,45 +124,15 @@ Go straight to `dangerouslyDisableSandbox` for these; don't retry inside sandbox
 - **Amending unpushed commits is always fine.** No confirmation needed.
 - **Sync open PRs via merge, not rebase.** `git merge origin/main` preserves review timeline. Only rebase if draft/unshared or explicitly requested.
 
-## Post-Push: CI Watch and Bot Review Triage
+## PR Review Workflows
 
-After pushing to any PR (including drafts), run both concurrently:
+- Post-push CI watch and bot review triage, and the addressing-feedback reply/thread-resolution
+  conventions: live in the `pr-review-bot-loop` and `pr-review-batching` skills.
+- Author review guidance (walkthrough + inline `:notebook:` comments on your own PRs): lives in
+  the `author-review-guidance` skill.
 
-**CI Watch:**
-- Poll with `gh pr checks`. On failure: read logs (`gh run view --log-failed`), diagnose, fix, commit, push, resume watching. On success: briefly confirm green.
-- **CI is authoritative** - local validation is necessary but not sufficient.
+## Session and Dependency Checks
 
-**Bot Review Triage** (Copilot, Codex, etc.):
-- Evaluate automatically: read all comments, verify each claim, categorize (accept/reject/nuance), present concise recommendation per comment.
-- Act only with explicit authorization. Batch trivial fixes into one commit. Flag non-trivial scope separately.
-
-## PR Review Conventions
-
-**Addressing feedback** (human and bot):
-- Accepted: reply `:zap: <commit hash>` plus a brief change/rationale summary. No affirmation prefixes ("good catch", "fair point", "great point", etc.); state what changed and why, nothing else.
-- Rejected: reply `:thought_balloon: <brief rationale>`.
-- Batch trivial fixes; non-trivial gets its own commit.
-- **Address the actionable ask first.** Separate the reviewer's requested change from any incidental premise: act on the request, then correct the premise if it is off (in that order). A technically-correct clarification is not a substitute for the fix and can read as a dismissal, so a reply that only clarifies, with no accept/reject on the underlying ask, is incomplete triage.
-- **Only resolve threads we authored.** Reviewer threads stay open so reviewers can see what was flagged and weigh in. For our threads: resolve after reply is published (if staged as pending, wait until review is submitted).
-- Use `resolveReviewThread` GraphQL mutation; never `minimizeComment`.
-
-**Posting reviews on my behalf:**
-- Never post comments individually. Use pending review mechanism.
-- Present batch for confirmation; I submit manually.
-
-## Author Review Guidance
-
-When asked, post review-guidance comments on our own PRs as a **single review submission**: walkthrough as review body, inline comments threaded below.
-
-**Walkthrough** (review body):
-- One-paragraph summary of what changed and why.
-- Ordered file list in suggested reading order: file path, what changed, why that order.
-- Call out what reviewers should skip (mechanical renames, generated code).
-
-**Inline comments** (on specific diff lines):
-- Prefix with :notebook: to distinguish from review feedback.
-- Add for: dense logic, intentional tradeoffs, subtle constraints, anything where "why this way?" is predictable.
-- Skip for: obvious changes, anything the walkthrough already covers.
-- Flag risk. Keep to 1-2 sentences. If it needs more, the code needs a real comment.
-
-**Mechanics:** Stage via pr-review-batching skill. Don't duplicate PR description or commit messages; reference them.
+- Before ending a session where substantive work happened, check the `session-wrapup` skill.
+- Before fixing a vulnerability in a transitive dependency, check the `transitive-dep-cve-fixes`
+  skill.

@@ -356,6 +356,22 @@ Because replies publish immediately, the user must approve each batch before any
    endpoint rejects `in_reply_to`, that is expected. Present the text for manual posting or
    seek explicit confirmation, do not silently switch to an immediate-publish endpoint.
 
+### Reply conventions
+
+- **Accepted:** reply `:zap: <commit hash>` plus a brief change/rationale summary. No
+  affirmation prefixes ("good catch", "fair point", "great point", etc.); state what changed
+  and why, nothing else.
+- **Rejected:** reply `:thought_balloon: <brief rationale>`.
+- **Address the actionable ask first.** Separate the reviewer's requested change from any
+  incidental premise: act on the request, then correct the premise if it is off (in that
+  order). A technically-correct clarification is not a substitute for the fix and can read as
+  a dismissal, so a reply that only clarifies, with no accept/reject on the underlying ask, is
+  incomplete triage.
+- **Only resolve threads you authored.** Reviewer threads stay open so reviewers can see what
+  was flagged and weigh in. For your own threads: resolve after the reply is published (if
+  staged as pending, wait until the review is submitted).
+- Use the `resolveReviewThread` GraphQL mutation; never `minimizeComment`.
+
 ---
 
 ## Interaction with `pr-review`

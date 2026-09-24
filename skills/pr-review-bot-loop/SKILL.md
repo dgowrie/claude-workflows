@@ -56,6 +56,20 @@ fixes, and driving a reviewer at their branch is noise they did not ask for. For
 
 ---
 
+## Run alongside CI watch
+
+After pushing to any PR (including drafts), run this loop concurrently with a CI watch, not
+sequentially:
+
+- **CI watch:** poll with `gh pr checks`. On failure: read logs (`gh run view --log-failed`),
+  diagnose, fix, commit, push, resume watching. On success: briefly confirm green.
+- **CI is authoritative.** Local validation is necessary but not sufficient.
+- Evaluate every bot comment automatically: read it, verify the claim, categorize
+  (accept/reject/nuance), present a concise recommendation. Act only with explicit
+  authorization. Batch trivial fixes into one commit; flag non-trivial scope separately.
+
+---
+
 ## Inputs
 
 | Input | Values | Default |
@@ -245,7 +259,7 @@ on the PR rather than in session memory, and a fresh session picks the loop up m
 
 ### Thread hygiene
 
-Reply in the format the global PR Review Conventions define. Replies need the **numeric** comment
+Reply in the format the `pr-review-batching` skill's reply conventions define. Replies need the **numeric** comment
 id, not the GraphQL node id, which 404s: `POST /pulls/{n}/comments/{numericId}/replies`.
 
 **Leave every bot thread open.** An open thread keeps the finding and your response visible for the
@@ -329,9 +343,10 @@ head.
 
 ## Notes
 
-- Global conventions (PR Review Conventions, TDD, Definition of Done, commit and dash rules) live in
-  the global `CLAUDE.md` and `~/.claude/rules/`. This skill obeys them and points at them rather
-  than copying them. The one repetition it does carry is deliberate: leaving bot threads open is
-  restated here because driving toward "clean" is exactly the context that tempts you past it.
+- Global conventions (TDD, Definition of Done, commit and dash rules) live in the global
+  `CLAUDE.md` and `~/.claude/rules/`; PR reply and thread-resolution conventions live in the
+  `pr-review-batching` skill. This skill obeys them and points at them rather than copying them.
+  The one repetition it does carry is deliberate: leaving bot threads open is restated here
+  because driving toward "clean" is exactly the context that tempts you past it.
 - Related: `/pr-review` (find and format), `/pr-review-adversarial` (validate findings),
   `/pr-review-batching` (stage, never publish).

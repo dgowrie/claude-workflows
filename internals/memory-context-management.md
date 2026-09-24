@@ -89,7 +89,7 @@ This page is the rationale source for three things that encode its numbers. Chan
 | Artifact | What it inherits |
 | --- | --- |
 | [`config/rules/memory-hygiene.md`](../config/rules/memory-hygiene.md) | The 1KB / 2KB file sizing, prune-and-dedupe posture, index description quality bar |
-| [`config/rules/memory-session-exit.md`](../config/rules/memory-session-exit.md) | The staleness and consolidation checks, driven by index bloat cost |
+| [`skills/session-wrapup/SKILL.md`](../skills/session-wrapup/SKILL.md) | The staleness and consolidation checks (section 1), driven by index bloat cost |
 | [`skills/memory-audit/SKILL.md`](../skills/memory-audit/SKILL.md) | The audit procedure; its stated goal is keeping the two-tier system efficient |
 
-Both rules are symlinked into `~/.claude/rules/` and load into every session, so they carry the directives without the reasoning. The reasoning lives here.
+`memory-hygiene.md` is symlinked into `~/.claude/rules/` and loads into every session, so it carries the directive without the reasoning. `session-wrapup` is a skill and loads on invocation instead, carrying its directive only when triggered. The reasoning lives here either way.
