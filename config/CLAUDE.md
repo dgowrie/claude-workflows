@@ -69,6 +69,7 @@ For each issue: describe with file/line references, present 2-3 options (includi
 ## Definition of Done
 
 - **Validate before pushing.** Tests pass, typecheck clean, lint clean. Full suite before push, even for "low-risk" changes.
+- **Commit only after reading green validation output.** Never put `git commit` in the same parallel tool batch as the tests/typecheck/lint it depends on. Run the full test suite and `tsc` sequentially, not concurrently: running them in parallel can crash Jest workers (SIGSEGV) and produce false failures.
 - **Lint clean means zero warnings in files we touched**, not just zero errors. Lint fixes go in their own discrete commit.
 - **Non-code changes still require validation.** Use available tooling (actionlint, yamllint, schema checks) or review against specs.
 - **No untracked shortcuts.** No cut corners without documented tradeoffs and follow-up plan.
