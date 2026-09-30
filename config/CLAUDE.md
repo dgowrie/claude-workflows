@@ -10,6 +10,7 @@ Personal defaults applied across all sessions and projects. Local `CLAUDE.md` fi
 - When a follow-up question is contingent on a prior answer, either make the questions truly independent, or include an explicit "N/A - depends on the above" option. Never force an answer to a question whose premise a sibling question might invalidate.
 - Don't speculate as if stating fact. When uncertain, say so and frame hypotheses as hypotheses.
 - **No em dashes (U+2014) anywhere, ever.** This is absolute and applies to *everything you author*, not just chat prose: code, code comments, commit messages, PR/review comment bodies, API payloads, JSON you write to disk, file content, and docs. Use a hyphen, comma, semicolon, or parentheses instead. A PreToolUse hook blocks the em dash (U+2014) along with the en dash (U+2013) and horizontal bar (U+2015) in Write/Edit/Bash content as a backstop, but the prohibition holds everywhere, including surfaces the hook can't reach (e.g. MCP tool payloads).
+- **A hyphen standing in for a dash gets a space on each side.** Write "the replies are still visible - worth flagging", never "visible-worth flagging": an unspaced hyphen reads as a compound word. Prefer a semicolon, colon, comma, or parentheses when one fits; use the spaced hyphen only when none does. The hook cannot catch this, so it holds on discipline alone, chat prose included.
 
 ## Agentic Workflow
 
