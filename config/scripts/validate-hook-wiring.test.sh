@@ -152,5 +152,65 @@ else
   printf 'skip real config/settings.example.json (file not present yet)\n'
 fi
 
+# --- event-type awareness -------------------------------------------------
+# A hook wired under a lifecycle event that takes no matcher (SessionStart,
+# Stop, etc.) counts as wired on presence alone; the non-empty-matcher rule is
+# only for the tool-matching events (PreToolUse / PostToolUse).
+ev_dir="$work/hooks_ev"; mkdir -p "$ev_dir"; : >"$ev_dir/session.sh"
+write_settings "$work/ev.json" '{
+  "hooks": { "SessionStart": [
+    { "hooks": [ { "type": "command", "command": "/x/session.sh" } ] }
+  ] }
+}'
+out="$(bash "$script" "$work/ev.json" "$ev_dir" 2>&1)"; got=$?
+if [ "$got" -eq 0 ]; then
+  pass=$((pass+1)); printf 'ok   SessionStart hook wired without a matcher -> pass\n'
+else
+  fail=$((fail+1)); printf 'FAIL SessionStart no-matcher (exit=%s): %s\n' "$got" "$out"
+fi
+
+# A tool-matching hook still needs a non-empty matcher even though lifecycle
+# hooks do not: PreToolUse with an empty matcher remains a failure.
+write_settings "$work/ev2.json" '{
+  "hooks": { "PreToolUse": [
+    { "matcher": "", "hooks": [ { "type": "command", "command": "/x/session.sh" } ] }
+  ] }
+}'
+out="$(bash "$script" "$work/ev2.json" "$ev_dir" 2>&1)"; got=$?
+if [ "$got" -eq 1 ] && printf '%s' "$out" | grep -qiF "EMPTY matcher"; then
+  pass=$((pass+1)); printf 'ok   PreToolUse empty matcher still fails\n'
+else
+  fail=$((fail+1)); printf 'FAIL PreToolUse empty matcher (exit=%s): %s\n' "$got" "$out"
+fi
+
+# --- personal opt-out marker -----------------------------------------------
+# A committed hook carrying `# wiring: personal` is skipped: it is not expected
+# in the shared template. A sibling hook with no marker is still required.
+pm_dir="$work/hooks_pm"; mkdir -p "$pm_dir"
+printf '#!/usr/bin/env bash\n# wiring: personal\n' >"$pm_dir/mine.sh"
+: >"$pm_dir/shared.sh"
+write_settings "$work/pm.json" '{
+  "hooks": { "PreToolUse": [
+    { "matcher": "Write", "hooks": [ { "type": "command", "command": "/x/shared.sh" } ] }
+  ] }
+}'
+out="$(bash "$script" "$work/pm.json" "$pm_dir" 2>&1)"; got=$?
+if [ "$got" -eq 0 ] && printf '%s' "$out" | grep -qiF "mine.sh"; then
+  pass=$((pass+1)); printf 'ok   personal-marked hook is skipped, sibling still checked\n'
+else
+  fail=$((fail+1)); printf 'FAIL personal marker skip (exit=%s): %s\n' "$got" "$out"
+fi
+
+# The marker does not globally disable the check: an unmarked, unwired sibling
+# still fails and is named.
+printf '#!/usr/bin/env bash\n# wiring: personal\n' >"$pm_dir/also-mine.sh"
+: >"$pm_dir/unwired.sh"
+out="$(bash "$script" "$work/pm.json" "$pm_dir" 2>&1)"; got=$?
+if [ "$got" -eq 1 ] && printf '%s' "$out" | grep -qiF "unwired.sh"; then
+  pass=$((pass+1)); printf 'ok   personal marker is per-file, unmarked sibling still fails\n'
+else
+  fail=$((fail+1)); printf 'FAIL personal marker per-file (exit=%s): %s\n' "$got" "$out"
+fi
+
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
