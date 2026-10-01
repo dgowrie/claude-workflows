@@ -3,6 +3,11 @@
 # Prune Matt Pocock plugin skills that duplicate my own customized personal
 # skills, so Claude only ever sees my versions.
 #
+# wiring: personal
+#   A machine-local SessionStart hook; it lives only in the private
+#   ~/.claude/settings.json, never the tracked template. validate-hook-wiring.sh
+#   skips hooks carrying this marker.
+#
 # Why this exists:
 #   The mattpocock-skills Claude Code plugin ships ~25 skills as one bundle
 #   (installed for the `teach` skill, kept current via the plugin's auto-update).
