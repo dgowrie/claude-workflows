@@ -2,24 +2,32 @@
 name: pr-review-batching
 user-invocable: true
 description: >
-  Stages PR review comments as drafts on a GitHub pending review; never publishes. Owns two
-  operations: (1) ensure-then-append, which adds comments to an existing pending review or
-  creates one if none exists, without clobbering user-in-flight edits; (2) incident response,
-  which undoes an accidentally published review by deleting its visible comments and
-  recreating as pending.
+  Owns the submission lifecycle for PR review comments. Three operations: (1) ensure-then-append,
+  which stages NEW inline comments as drafts on a pending review, creating one if none exists,
+  without clobbering user-in-flight edits; (2) incident response, which undoes an accidentally
+  published review by deleting its visible comments and recreating as pending; (3) replies to
+  EXISTING review threads, which cannot be staged at all, because the replies endpoint publishes
+  on send and the pending-review endpoint rejects `in_reply_to`; those require the user's explicit
+  confirmation before posting.
 
-  ACTION-BOUNDARY TRIGGER: consult this skill before any `gh pr review` invocation or any
-  POST / DELETE on `/pulls/{n}/reviews`. This skill is the guard against publishing a review
-  when the user wanted drafts. Also triggers on phrases: "draft comment", "pending review",
-  "post this as a draft", "add to the review", "stage as a draft", or explicit
+  ACTION-BOUNDARY TRIGGER: consult this skill before any `gh pr review` invocation, before any
+  POST / DELETE on `/pulls/{n}/reviews`, and before OFFERING OR PROMISING a draft, staged, or
+  pending path for PR feedback. The offer boundary matters as much as the execution one: checking
+  only at execution time is too late to avoid promising a staging flow that does not exist for
+  thread replies. Also triggers on phrases: "draft comment", "pending review", "post this as a
+  draft", "add to the review", "stage as a draft", "reply to the review comments", or explicit
   `/pr-review-batching`.
 ---
 
 # PR Review Batching
 
-This skill owns the submission lifecycle for PR review comments. Every comment is staged as a
-draft on a pending review; the user submits manually. Claude never sets `event=COMMENT`,
-`event=APPROVE`, or `event=REQUEST_CHANGES`.
+This skill owns the submission lifecycle for PR review comments. Every *new inline comment* is
+staged as a draft on a pending review; the user submits manually. Claude never sets
+`event=COMMENT`, `event=APPROVE`, or `event=REQUEST_CHANGES`.
+
+Replies to *existing* review threads are the exception: GitHub offers no draft path for them
+(see Operation 3). Never offer to stage a thread reply. Check which kind of comment is in play
+before describing the flow to the user, not just before executing it.
 
 Documented user convention (global `CLAUDE.md`):
 
@@ -347,6 +355,22 @@ Because replies publish immediately, the user must approve each batch before any
 4. **Never fall back to direct publish when a draft path fails.** If the pending review
    endpoint rejects `in_reply_to`, that is expected. Present the text for manual posting or
    seek explicit confirmation, do not silently switch to an immediate-publish endpoint.
+
+### Reply conventions
+
+- **Accepted:** reply `:zap: <commit hash>` plus a brief change/rationale summary. No
+  affirmation prefixes ("good catch", "fair point", "great point", etc.); state what changed
+  and why, nothing else.
+- **Rejected:** reply `:thought_balloon: <brief rationale>`.
+- **Address the actionable ask first.** Separate the reviewer's requested change from any
+  incidental premise: act on the request, then correct the premise if it is off (in that
+  order). A technically-correct clarification is not a substitute for the fix and can read as
+  a dismissal, so a reply that only clarifies, with no accept/reject on the underlying ask, is
+  incomplete triage.
+- **Only resolve threads you authored.** Reviewer threads stay open so reviewers can see what
+  was flagged and weigh in. For your own threads: resolve after the reply is published (if
+  staged as pending, wait until the review is submitted).
+- Use the `resolveReviewThread` GraphQL mutation; never `minimizeComment`.
 
 ---
 

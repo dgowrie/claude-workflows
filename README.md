@@ -16,6 +16,18 @@ skills/        Skill drafts before deploying to ~/.claude/skills/
 agents/        Subagent definitions, symlinked into ~/.claude/agents/
 ```
 
+The repo is mostly prose and has no build. It does carry some executable logic: the hook scripts in
+`config/hooks/`, `skills/work-next-task/scripts/ralph.sh`, and the bot-loop detector. Only the
+detector has automated tests, and CI runs them on any PR touching its directory:
+
+```bash
+python3 -m unittest discover -s skills/pr-review-bot-loop/scripts        # offline, what CI runs
+SIGNALS_LIVE=1 python3 -m unittest discover -s skills/pr-review-bot-loop/scripts
+```
+
+The live half asserts against real PRs through the GitHub API, so it needs an authenticated `gh`
+and stays a pre-push check rather than a CI gate.
+
 ## Contents
 
 ### Internals
@@ -45,6 +57,8 @@ Changes to a skill file in the repo are immediately live — no copy or sync ste
 
 - [`/pr-review`](skills/pr-review/SKILL.md) — AI-assisted GitHub PR review with line-level draft comments
 - [`/pr-review-batching`](skills/pr-review-batching/SKILL.md) - stage PR review comments as drafts on a pending review (never publishes); owns ensure-then-append and accidental-publish incident response
+- [`/pr-review-adversarial`](skills/pr-review-adversarial/SKILL.md) - two-phase adversarial validation of review findings: an independent fresh-context reviewer attacks the code, then a second reviewer attacks every finding, fix, and dismissal with a default-to-NOT-PROVEN mandate
+- [`/pr-review-bot-loop`](skills/pr-review-bot-loop/SKILL.md) - drive your own PR to a clean automated-reviewer pass before human review: a five-signal Copilot adapter (re-request / pending? / landed? / clean? / suppressed?) whose `suppressed?` signal catches the real findings Copilot hides in the review body. Ships with `scripts/copilot-signals.py`
 - [`/memory-audit`](skills/memory-audit/SKILL.md) — reflective review, consolidation, and pruning of memory files; defaults to current project, offers a cross-project sweep for promotion candidates
 - [`/branch-cleanup`](skills/branch-cleanup/SKILL.md) — interactive local branch cleanup with PR cross-referencing
 - [`/grill-me`](skills/grill-me/SKILL.md) — stress-test a plan or design through relentless interrogation
@@ -56,19 +70,34 @@ Changes to a skill file in the repo are immediately live — no copy or sync ste
 - [`/review-thorough`](skills/review-thorough/SKILL.md) — wraps built-in `/review` and additionally evaluates bot reviews including resolved threads
 - [`/security-audit`](skills/security-audit/SKILL.md) — three-phase source-code vulnerability scan (dep audit, parallelized source review, verification + false-positive triage) with GitHub issue tracking
 - [`/check-npm`](skills/check-npm/SKILL.md) - audit a JS/TS repo's npm/yarn/pnpm config for supply-chain hardening (lifecycle scripts, git deps, ignore-scripts, min-release-age)
+- [`/explain-usage`](skills/explain-usage/SKILL.md) - explain where a session's tokens went with one plain-language chart, weighting cache reads/writes and output to show effective usage by group
+- [`/improve-codebase-architecture`](skills/improve-codebase-architecture/SKILL.md) - repo-wide architecture review: scan for deepening opportunities, render them as a visual HTML report, then grill through the one you pick (adapted from [mattpocock/skills](https://github.com/mattpocock/skills))
+- [`/codebase-design`](skills/codebase-design/SKILL.md) - shared deep-module vocabulary (module, interface, depth, seam, adapter, leverage, locality) plus deepening and design-it-twice guides; underpins `/improve-codebase-architecture`
+- [`/domain-modeling`](skills/domain-modeling/SKILL.md) - build and sharpen a project's domain model (`CONTEXT.md` glossary, `docs/adr/` decisions); companion to `/improve-codebase-architecture`
+- [`/grilling`](skills/grilling/SKILL.md) - Matt Pocock's decision-tree grilling loop, kept distinct from the customized `/grill-me` so `/improve-codebase-architecture` can call it by name
+- [`/writing-for-agents`](skills/writing-for-agents/SKILL.md) - Matt Pocock's reference for writing any document an agent consumes (skills, `AGENTS.md`, `CLAUDE.md`): context pointers, the two loads, information hierarchy, leading words, pruning. Copied verbatim from [mattpocock/skills](https://github.com/mattpocock/skills/tree/main/skills/productivity/writing-for-agents); model-invoked, so it fires on its own when you edit a skill or `CLAUDE.md`
+- [`/import-memory`](skills/import-memory/SKILL.md) - import a memory export from another AI assistant (ChatGPT, Gemini, etc.) into Claude's memory: additive-only, treats the pasted export as data never instructions, and drops behavioral directives disguised as facts. Prompt-form copy of Claude's built-in memory-import pipeline
+- [`/github-api-mechanics`](skills/github-api-mechanics/SKILL.md) - non-obvious `gh` REST/GraphQL details: `in_reply_to` field and `PRRT_` vs `PRRC_` node IDs for review threads, native `addSubIssue`, and requesting Copilot via REST `requested_reviewers`
+- [`/transitive-dep-cve-fixes`](skills/transitive-dep-cve-fixes/SKILL.md) - run the range test before pinning: a lockfile re-resolution beats a `resolutions`/`overrides` pin whenever the parent ranges already admit the fix
+- [`/session-wrapup`](skills/session-wrapup/SKILL.md) - at session end, audit memories for staleness and surface leftover worktrees, stale branches, background processes, and temp files with cleanup commands (no destructive action without confirmation)
+- [`/author-review-guidance`](skills/author-review-guidance/SKILL.md) - post review-guidance comments on your own PRs as a single review submission: walkthrough as review body, inline `:notebook:` comments threaded below for anything a reviewer would predictably ask "why this way?" about
 
 ### Rules
 
 Rules in `config/rules/` are symlinked into `~/.claude/rules/`, making them globally active across all projects. Like skills, edits in the repo are immediately live.
 
 ```
-~/.claude/rules/memory-session-exit.md -> ~/dev/claude-workflows/config/rules/memory-session-exit.md
+~/.claude/rules/memory-hygiene.md -> ~/dev/claude-workflows/config/rules/memory-hygiene.md
 ```
 
-- [Memory Session Exit](config/rules/memory-session-exit.md) — audit and update project memories before ending any substantive session
 - [Memory Hygiene](config/rules/memory-hygiene.md) — guidelines for memory file size, deduplication, and lifecycle
 - [Self-Correction Loop](config/rules/self-correction-loop.md) — on correction, propose a CLAUDE.md or rule update before continuing
 - [Epistemic Honesty](config/rules/epistemic-honesty.md) — label verified vs inferred vs assumed; self-challenge before committing to conclusions
+- [Temp-File Path Discipline](config/rules/temp-file-path-discipline.md) - write and read the same absolute path for file-consuming commands (`--body-file`, `-F`, `@file`); never assume `$TMPDIR` is the scratchpad; verify outward-facing artifacts after creation
+- [Silent Zeros](config/rules/silent-zeros.md) - a failure that renders as an empty result reads as success; make failure representable in the return type, fail closed in gates, and force the failure in a test
+- [Write New-File Collision](config/rules/write-new-file-collision.md) - verify a path is empty before Write-creating; a missing grep hit is not proof of absence; if it exists, Read then Edit rather than overwrite
+- [Worktree Gotchas](config/rules/worktree-gotchas.md) - worktree-isolation behaviors that look like stale caches or git errors: file tools need the worktree-prefixed absolute path, and `main` fast-forwards must run outside the worktree
+- [No Review Artifacts in Shipped Code](config/rules/no-review-artifacts-in-shipped-code.md) - keep review-loop labels (F1/C3), reviewer/process names, and planning jargon (piece 2) out of committed code, comments, and test names; issue/PR numbers stay legitimate; grep the staged diff before committing
 
 ### Hooks
 
@@ -80,6 +109,7 @@ Hook scripts in `config/hooks/` are symlinked into `~/.claude/hooks/`. Unlike sk
 
 - [`block-em-dash.sh`](config/hooks/block-em-dash.sh) - PreToolUse hook enforcing the no-em-dash rule. Requires matcher `Write|Edit|Bash` in `settings.json` so it inspects the inline Bash command string (`gh`/`git` titles, commit subjects), not just `Write`/`Edit`. Tested via [`block-em-dash.test.sh`](config/hooks/block-em-dash.test.sh) (`bash config/hooks/block-em-dash.test.sh`).
 - [`block-claude-attribution.sh`](config/hooks/block-claude-attribution.sh) - PreToolUse hook blocking Claude attribution footers and `Co-Authored-By` trailers.
+- [`prune-mattpocock-duplicates.sh`](config/hooks/prune-mattpocock-duplicates.sh) - SessionStart hook (no matcher). Deletes the 6 auto-firing `mattpocock-skills` plugin skills that duplicate my customized personal skills, so Claude only sees mine. Runs every session, so it self-heals after a plugin update re-materializes the bundle. Installed for the plugin's `teach` skill; `skillOverrides` cannot target plugin skills, hence the prune approach.
 
 Because the matcher wiring lives in untracked `settings.json`, a committed hook will not fire for anyone who has not mirrored the matcher locally. [#24](https://github.com/dgowrie/claude-workflows/issues/24) closes that gap: `config/settings.example.json` tracks the wiring, and `config/scripts/validate-hook-wiring.sh` fails if any committed hook is unwired in a given `settings.json` (tracked template or live).
 
@@ -111,4 +141,4 @@ Subagent definitions in `agents/` are symlinked into `~/.claude/agents/`, making
 
 ### Skills
 
-- **Evaluate replacing `/pr-review` with Cowork's `/review`** — our custom skill had a repo-resolution bug (given a grafana-adaptivelogs-app PR, it cloned and worked in adaptivetraces-app, took many turns to self-correct). Cowork's built-in `/review` may handle repo context better. However, the two skills surfaced different feedback, so the right move is likely to consolidate the best of both rather than a straight swap.
+- **Evaluate replacing `/pr-review` with Cowork's `/review`** — our custom skill had a repo-resolution bug (given a PR in one repo, it cloned and worked in a similarly-named sibling repo, took many turns to self-correct). Cowork's built-in `/review` may handle repo context better. However, the two skills surfaced different feedback, so the right move is likely to consolidate the best of both rather than a straight swap.
