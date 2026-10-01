@@ -35,8 +35,8 @@ live file's wiring:
 
 - `install-settings.sh`: `--init` copies the template to `~/.claude/settings.json`
   (only if absent); `--check` (default) verifies the live file wires every hook.
-- `validate-hook-wiring.sh`: fail if any `config/hooks/*.sh` is unwired or wired
-  with an empty matcher in a given settings file.
+- `validate-hook-wiring.sh`: fail if any `config/hooks/*.sh` is unwired in a given
+  settings file (or, for a tool event, wired with an empty matcher).
 
 Each has a companion `*.test.sh` (plain bash, no framework). Run them directly:
 
@@ -94,16 +94,23 @@ bash config/scripts/validate-hook-wiring.sh
 bash config/scripts/validate-hook-wiring.sh ~/.claude/settings.json config/hooks
 ```
 
-It checks **presence + a non-empty matcher** for each hook, not whether the matcher
-covers the "right" tools. Inferring intended tools from a script is brittle, and
-the tracked template already makes the intended matchers visible in review. A hook
-counts as wired if any `PreToolUse` command references its filename, tolerant of
-trailing args and shell prefixes (`sh -c '.../foo.sh'`, `bash .../foo.sh`). A
-future job could add a per-hook `# required-matcher:` annotation for stricter
-checks.
+It checks **presence**, not whether a matcher covers the "right" tools. Inferring
+intended tools from a script is brittle, and the tracked template already makes the
+intended matchers visible in review. A hook counts as wired if any command, under
+any hook event, references its filename, tolerant of trailing args and shell
+prefixes (`sh -c '.../foo.sh'`, `bash .../foo.sh`). A **non-empty matcher** is
+required only for the tool-matching events (`PreToolUse` / `PostToolUse`), where an
+empty matcher selects no tool so the hook never fires; lifecycle events
+(`SessionStart`, `Stop`, ...) take no matcher, so presence alone wires them.
+
+A hook can opt out of the check with a `# wiring: personal` comment marker. That
+marks a machine-local hook that intentionally lives only in your private
+`~/.claude/settings.json`, never the shared template (for example
+`prune-mattpocock-duplicates.sh`, a personal `SessionStart` hook). Marked hooks are
+skipped, so they neither need a template entry nor trip the check.
 
 ## Adding a new hook
 
 1. Add `config/hooks/<name>.sh` and symlink it: `ln -s ~/dev/claude-workflows/config/hooks/<name>.sh ~/.claude/hooks/<name>.sh`
-2. Wire it in `config/settings.example.json` under `hooks.PreToolUse` with a matcher, and in your live `~/.claude/settings.json`.
-3. Run `bash config/scripts/validate-hook-wiring.sh`; it fails until the template wires the hook.
+2. Wire it in `config/settings.example.json` under its hook event (a `PreToolUse` / `PostToolUse` hook needs a matcher; a lifecycle hook like `SessionStart` does not), and in your live `~/.claude/settings.json`. A machine-local personal hook instead carries a `# wiring: personal` marker and is left out of the template.
+3. Run `bash config/scripts/validate-hook-wiring.sh`; it fails until the template wires the hook (or the hook is marked personal).
