@@ -23,4 +23,15 @@ Read/Write/Edit resolve absolute paths literally. A main-checkout path like `/â€
 - Apply: verify before retrying, `gh pr view <n> --json state,mergeCommit`. If `MERGED`, do NOT re-run the merge. Finish the cleanup by hand: `git push origin --delete <branch>` for the remote branch, and fast-forward `main` from outside the worktree (see above). The merged branch is still checked out in the worktree, so it cannot be deleted from there either; rename or leave it.
 - Same shape applies to any `gh`/tool step that does a server action then a local checkout.
 
+## What `/exit` cleans up, and what it leaves
+
+Exiting an interactive `--worktree` session checks the worktree before removing anything. Don't claim exit never touches worktrees, or that it always does (docs: code.claude.com/docs/en/worktrees, "Clean up worktrees"; re-checked 2026-10).
+
+- Clean worktree, unnamed session: the worktree and its branch are removed automatically. Named session: it prompts first.
+- Changed or untracked files, or new commits: it prompts keep/remove. Remove deletes the directory and branch, work included.
+- State it can't verify: it prompts rather than removing.
+- Only the local branch goes. A pushed remote branch stays; delete it yourself (`git push origin --delete <branch>`).
+- `claude -p --worktree` runs have no exit prompt, so nothing is cleaned up and the creation lock stays until a later session's stale-lock sweep. Remove with `git worktree remove`: run `git worktree unlock` first if git refuses because it is locked, and add `--force` for uncommitted or untracked files.
+- Exit only handles the current session's worktree. Kept and orphaned worktrees, and the remote branches of merged PRs, accumulate. Subagent and backgrounded-session worktrees are swept after `cleanupPeriodDays`, but only when they hold no work. Automation gap: [#55](https://github.com/dgowrie/claude-workflows/issues/55).
+
 Why: these look like git errors or flaky tool failures but are the worktree-isolation guard.

@@ -96,7 +96,7 @@ Rules in `config/rules/` are symlinked into `~/.claude/rules/`, making them glob
 - [Temp-File Path Discipline](config/rules/temp-file-path-discipline.md) - write and read the same absolute path for file-consuming commands (`--body-file`, `-F`, `@file`); never assume `$TMPDIR` is the scratchpad; verify outward-facing artifacts after creation
 - [Silent Zeros](config/rules/silent-zeros.md) - a failure that renders as an empty result reads as success; make failure representable in the return type, fail closed in gates, and force the failure in a test
 - [Write New-File Collision](config/rules/write-new-file-collision.md) - verify a path is empty before Write-creating; a missing grep hit is not proof of absence; if it exists, Read then Edit rather than overwrite
-- [Worktree Gotchas](config/rules/worktree-gotchas.md) - worktree-isolation behaviors that look like stale caches or git errors: file tools need the worktree-prefixed absolute path, and `main` fast-forwards must run outside the worktree
+- [Worktree Gotchas](config/rules/worktree-gotchas.md) - worktree-isolation behaviors that look like stale caches or git errors: file tools need the worktree-prefixed absolute path, `main` fast-forwards must run outside the worktree, and `/exit` keeps or removes a worktree by its state but never deletes the remote branch
 - [No Review Artifacts in Shipped Code](config/rules/no-review-artifacts-in-shipped-code.md) - keep review-loop labels (F1/C3), reviewer/process names, and planning jargon (piece 2) out of committed code, comments, and test names; issue/PR numbers stay legitimate; grep the staged diff before committing
 
 ### Hooks
