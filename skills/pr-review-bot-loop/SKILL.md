@@ -172,7 +172,7 @@ It is three-state. Collapsing it to a boolean is a bug in opposite directions.
 | State | Condition | Loop action |
 | --- | --- | --- |
 | clean | review at head, nothing posted and nothing suppressed | terminate |
-| triage-required | review at head, and any of: inline comments non-zero, suppressed count non-zero or unparsable, or parsed findings disagreeing with a declared count | triage whatever it reported, posted or withheld, then fix, push, re-request |
+| triage-required | review at head, and any of: inline comments non-zero, suppressed count non-zero or unparsable, parsed findings disagreeing with a declared count, or an overview body that is not a known-clean verdict with nothing else in it | triage whatever it reported, posted or withheld, then fix, push, re-request |
 | not-applicable | no review at head | re-request, or wait if one is pending |
 
 - **Scope the check to the review at `headRefOid`.** A detector that scans every review on the PR
@@ -197,6 +197,34 @@ the label tight, not a bare `suppress`**: Copilot's per-file overview and the be
 per file` block restate each changed file's description, so a PR that is *about* suppressing
 something puts the word in an otherwise clean block; the tight `suppressed comments` / `comments
 suppressed` phrase adjacent to a count, scoped to a `<details>` block, is what excludes it.
+
+### Findings outside both: the overview body
+
+Copilot's newer review body (marked `<!-- ccr-overview-v2 -->`) can carry a finding that is neither
+an inline comment nor in a suppressed block, and every one of these shapes read as clean before the
+detector learned them. It prints them as `body_only=N` and `headline="<verdict>: <sentence>"`.
+
+- **The headline is the signal.** `### 🔵 Needs a closer look` plus one sentence, with
+  `**Findings:** None`, no list, and zero inline comments, was a real concern on a first review.
+  So was `### 🟡 Changes recommended`. Only `🟢 Approval recommended` has been seen on a genuinely
+  clean review, so it is the only allow-listed verdict; any other text is triage-required until a
+  second clean sample is captured.
+- **A green verdict can still carry a finding.** "No blocking issues were identified; only a minor
+  test naming nit remains." sat under `Approval recommended`. The sentence is scanned for `nit`,
+  `minor`, `remain(s)`, and `consider`; a hit is triage-required, read as "read the body", not clean.
+- **Vote tags count.** A `**Review findings:**` bullet list and `(N vote(s))` mentions in the
+  per-file table are findings with no thread. They are counted against `Open (N)` and the inline
+  comments; the surplus is `body_only`. `Resolved since last review` blocks are excluded, since
+  those were triaged in an earlier round. The count is a lower bound while inline comments exist
+  (one finding can become several), and exact at zero inline, the case that matters.
+- **Counts must agree.** A count in the headline ("Three unresolved ...") that disagrees with
+  `Findings: N` or `Open (N)` prints a warning that the format may have moved, and is triage-required.
+
+A headline finding has no thread to reply on, and a description that honestly lists deferred
+trade-offs can hold the headline at "Needs a closer look" indefinitely. Disposition it the way a
+suppressed finding is dispositioned: a PR comment, so exit `1` on that headline alone can end the
+loop under step 1. When a headline concern has no counterpart in the code, check the PR description
+first; a stale description produces headline findings by itself.
 
 **Validate a detector against a known-positive PR, and across a state transition.** Both parser
 traps and both scoping traps were found by running the thing against PRs whose answers were already
@@ -266,6 +294,11 @@ id, not the GraphQL node id, which 404s: `POST /pulls/{n}/comments/{numericId}/r
 human reviewer who comes next. This is the one action the loop must never take, and it is called out
 because the instinct while driving toward "clean" is to tidy threads shut; a session following an
 earlier version of `/pr-review` did exactly that. Resolve only threads you authored yourself.
+
+Copilot may resolve its own threads once it judges them fixed (observed: `isResolved: true,
+resolvedBy: Copilot`, listed under `Resolved since last review (N)` in the next overview). So a
+resolved bot thread is no longer evidence that this loop closed it; read your `:zap:` reply, not the
+resolved flag, for disposition.
 
 Thread replies publish the moment you post them and cannot be staged as drafts
 (`/pr-review-batching` Operation 3). Nothing in this loop is a draft.
