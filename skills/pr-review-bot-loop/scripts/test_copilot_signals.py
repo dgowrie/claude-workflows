@@ -535,6 +535,29 @@ class ClassificationTests(unittest.TestCase):
             "Two issues were resolved and three concerns were addressed.")
         self.assertVerdict([review(HEAD, body=body)], signals.CLEAN)
 
+    def test_overview_unparsable_or_missing_findings_declaration_fails_closed(self):
+        """An unreadable declaration is not "no findings". Read as absent it
+        yields the same value as a clean review, which is the silent zero."""
+        for replacement in ("**Findings:** Unknown", "**Findings:**", "Findings: None", ""):
+            with self.subTest(replacement=replacement):
+                body = OVERVIEW_CLEAN.replace("**Findings:** None", replacement)
+                self.assertVerdict([review(HEAD, body=body)], signals.TRIAGE_REQUIRED)
+
+    def test_overview_labelled_block_with_an_unreadable_count_fails_closed(self):
+        """"Previously missed" and "Open" carry findings. A label with no readable
+        number is not zero."""
+        for label in ("Previously missed", "Previously missed (several)",
+                      "Open", "Open (many)"):
+            with self.subTest(label=label):
+                body = OVERVIEW_CLEAN + (
+                    f"\n<details>\n<summary><strong>{label}</strong></summary>\n\n"
+                    "Something.\n</details>\n")
+                self.assertVerdict([review(HEAD, body=body)], signals.TRIAGE_REQUIRED)
+
+    def test_overview_declared_counts_with_a_severity_suffix_still_parse(self):
+        body = OVERVIEW_CLEAN.replace("**Findings:** None", "**Findings:** 0 low")
+        self.assertVerdict([review(HEAD, body=body)], signals.CLEAN)
+
     def test_overview_previously_missed_block_requires_triage(self):
         """Under a clean headline: the block is the only place the finding appears."""
         body = OVERVIEW_CLEAN + PREVIOUSLY_MISSED_BLOCK.format(count=1)

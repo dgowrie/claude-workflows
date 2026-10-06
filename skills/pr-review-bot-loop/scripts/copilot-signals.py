@@ -225,6 +225,10 @@ OPEN_COUNT = re.compile(r"\bOpen\s*\((\d+)\)", re.IGNORECASE)
 # inline thread and no vote tag, so under a green headline it is the only place the
 # finding appears.
 PREVIOUSLY_MISSED = re.compile(r"\bPreviously\s+missed\s*\((\d+)\)", re.IGNORECASE)
+# The same two labels with no readable number. A summary that names one of them
+# but gives no count is not zero findings, it is a count that could not be read.
+OPEN_LABEL = re.compile(r"^\W*Open\b", re.IGNORECASE)
+PREVIOUSLY_MISSED_LABEL = re.compile(r"\bPreviously\s+missed\b", re.IGNORECASE)
 RESOLVED_LABEL = re.compile(r"\bResolved\b", re.IGNORECASE)
 REVIEW_FINDINGS_LIST = re.compile(r"\*\*Review findings:\*\*[ \t]*\n(?P<items>(?:[ \t]*[-*][ \t]+.*(?:\n|$))+)")
 VOTE_TAG = re.compile(r"\((\d+)\s+votes?\)", re.IGNORECASE)
@@ -314,15 +318,20 @@ def parse_overview(body, inline):
 
     open_count = None
     previously_missed = 0
+    unreadable_counts = []
     counted_blocks = []
     for block in DETAILS_BLOCK.finditer(text):
         summary = block.group("summary")
         missed_match = PREVIOUSLY_MISSED.search(summary)
         if missed_match:
             previously_missed += int(missed_match.group(1))
+        elif PREVIOUSLY_MISSED_LABEL.search(summary):
+            unreadable_counts.append("Previously missed")
         open_match = OPEN_COUNT.search(summary)
         if open_match:
             open_count = (open_count or 0) + int(open_match.group(1))
+        elif OPEN_LABEL.search(re.sub(r"<[^>]+>", "", summary)):
+            unreadable_counts.append("Open")
         # Resolved threads keep their vote tags. They were triaged in an earlier
         # round, so counting them keeps every clean round dirty forever.
         if not RESOLVED_LABEL.search(summary):
@@ -355,6 +364,14 @@ def parse_overview(body, inline):
         reasons.append(f'headline verdict "{verdict}" is not a known-clean verdict')
     elif names_outstanding(sentence):
         reasons.append("the headline sentence names something outstanding")
+    # A declaration that is missing, or says something other than a count or "None",
+    # parses to the same value as no declaration. Left alone that is a silent zero:
+    # the one number the review states about itself cannot be read, and the verdict
+    # would clear on the strength of the headline alone.
+    if declared_match is None:
+        reasons.append("no parsable Findings declaration")
+    for label in unreadable_counts:
+        reasons.append(f"a {label} block with no parsable count")
     if declared:
         reasons.append(f"declares {declared} finding{'s' if declared != 1 else ''}")
     if open_count:

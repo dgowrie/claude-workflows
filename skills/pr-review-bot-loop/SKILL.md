@@ -238,6 +238,11 @@ detector learned them. It prints them as `body_only=N` and `headline="<verdict>:
 - **A `Previously missed (N)` block is a finding.** It holds findings in code the review says did
   not change, with no inline thread and no vote tag, so under a green headline it is the only place
   the finding appears. N is added to `body_only`.
+- **An unreadable count is not zero.** A missing or unparsable `**Findings:**` value (`Unknown`, an
+  empty one), or an `Open` or `Previously missed` block with no readable number, parses to the same
+  value as "nothing declared". Each is triage-required with its own reason, since clearing a review
+  on the headline alone while its own tally is unreadable is the silent zero this signal exists to
+  prevent.
 - **Counts must agree.** A count in the headline ("Three unresolved ...") that disagrees with
   `Findings: N` or `Open (N)` prints a warning that the format may have moved, and is triage-required.
   Each count is judged in its own clause and coordinated part, and a part with a negator or completed
