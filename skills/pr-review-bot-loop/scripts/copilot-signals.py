@@ -184,14 +184,23 @@ VERDICT_HEADING = re.compile(r"^###[ \t]+(?P<heading>.+?)[ \t]*$", re.MULTILINE)
 # phrased without a determiner ("and minor nit remains") is the miss this leaves.
 CONCERN_PROSE = re.compile(r"\bnits?\b|\bminor\b|\bremains?\b|\bconsider\b", re.IGNORECASE)
 #
-# A resolution word cancels a concern word the same way a negator does: "The minor
-# nit was fixed." names nothing outstanding. "unresolved" does not match, since
-# \bresolved needs a word boundary before it.
-CANCELLER = re.compile(
-    r"\b(?:no|not|none|nothing|without|never|neither|nor"
-    r"|resolved|fixed|addressed|handled|corrected)\b|n't",
-    re.IGNORECASE,
-)
+# A completed resolution cancels a concern word the same way a negator does: "The
+# minor nit was fixed." names nothing outstanding. Only a COMPLETED one does, though.
+# "was not fixed", "still needs to be fixed" and "should be addressed" carry the same
+# resolution word and state the opposite, so they are checked first and are
+# outstanding whatever else the clause holds. "unresolved" matches none of these,
+# since \bresolved needs a word boundary before it.
+RESOLUTION = r"(?:resolved|fixed|addressed|handled|corrected)\b"
+NEGATOR = re.compile(r"\b(?:no|not|none|nothing|without|never|neither|nor)\b|n't", re.IGNORECASE)
+COMPLETED = re.compile(r"\b(?:was|were|been|is|are|now|already)\s+" + RESOLUTION, re.IGNORECASE)
+# The negation here belongs to the resolution, so it is never a shared negator.
+NEGATED_RESOLUTION = re.compile(
+    r"(?:\b(?:not|never|still|yet)\b|n't)\s+(?:\w+\s+){0,3}?" + RESOLUTION, re.IGNORECASE)
+# A modal outstanding unless the clause negates it earlier: "Nothing needs to be
+# addressed." is clean, "The issue should be addressed." is not.
+PENDING_RESOLUTION = re.compile(
+    r"\b(?:needs?|needed|should|must|could|would|might|unless|until|before|to\s+be)\b"
+    r"\s+(?:\w+\s+){0,3}?" + RESOLUTION, re.IGNORECASE)
 CLAUSE_BREAK = re.compile(
     r"[;:,.]|\b(?:but|however|except|only|though|although|other\s+than|apart\s+from)\b",
     re.IGNORECASE,
@@ -250,7 +259,12 @@ def names_outstanding(sentence):
         for position, part in enumerate(COORDINATOR.split(segment)):
             if position == 0 or NEW_CLAUSE_OPENING.match(part):
                 negated = False
-            negated = negated or bool(CANCELLER.search(part))
+            if NEGATED_RESOLUTION.search(part):
+                return True
+            pending = PENDING_RESOLUTION.search(part)
+            if pending and not (negated or NEGATOR.search(part[:pending.start()])):
+                return True
+            negated = negated or bool(NEGATOR.search(part) or COMPLETED.search(part))
             if CONCERN_PROSE.search(part) and not negated:
                 return True
     return False
@@ -344,7 +358,7 @@ def parse_overview(body, inline):
     # "All three issues were resolved." and "No one found any issues." hold a count
     # word that is not a count of outstanding findings, so a cancelled sentence
     # takes no part in the cross-check.
-    if count_match and not CANCELLER.search(sentence):
+    if count_match and not (NEGATOR.search(sentence) or COMPLETED.search(sentence)):
         said = count_match.group("count").lower()
         said = NUMBER_WORDS.get(said) or int(said)
         # Only a count the body also declares can disagree with it.

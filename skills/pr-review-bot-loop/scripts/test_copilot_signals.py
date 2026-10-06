@@ -435,6 +435,32 @@ class ClassificationTests(unittest.TestCase):
                     "blocking issues.", sentence)
                 self.assertVerdict([review(HEAD, body=body)], signals.TRIAGE_REQUIRED)
 
+    def test_overview_negated_or_pending_resolution_requires_triage(self):
+        """A resolution word cancels a concern only when the item was resolved.
+        "not fixed", "still needs to be fixed" and "should be addressed" are the
+        opposite, and reading them as clean ends the loop on a stated leftover."""
+        for sentence in ("The minor nit was not fixed.",
+                         "The nit wasn't addressed.",
+                         "The minor nit still needs to be fixed.",
+                         "The nit has not been resolved.",
+                         "The issue should be addressed before merge.",
+                         "Not all issues were fixed.",
+                         "No blocking issues, and the nit was never resolved."):
+            with self.subTest(sentence=sentence):
+                body = OVERVIEW_CLEAN.replace(
+                    "The changes are fully reviewed, tested, and have no unresolved "
+                    "blocking issues.", sentence)
+                self.assertVerdict([review(HEAD, body=body)], signals.TRIAGE_REQUIRED)
+
+    def test_overview_negated_need_to_resolve_stays_clean(self):
+        for sentence in ("Nothing needs to be addressed.",
+                         "No nits remain; nothing should be fixed."):
+            with self.subTest(sentence=sentence):
+                body = OVERVIEW_CLEAN.replace(
+                    "The changes are fully reviewed, tested, and have no unresolved "
+                    "blocking issues.", sentence)
+                self.assertVerdict([review(HEAD, body=body)], signals.CLEAN)
+
     def test_overview_previously_missed_block_requires_triage(self):
         """Under a clean headline: the block is the only place the finding appears."""
         body = OVERVIEW_CLEAN + PREVIOUSLY_MISSED_BLOCK.format(count=1)

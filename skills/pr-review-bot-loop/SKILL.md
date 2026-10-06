@@ -212,8 +212,11 @@ detector learned them. It prints them as `body_only=N` and `headline="<verdict>:
 - **A green verdict can still carry a finding.** "No blocking issues were identified; only a minor
   test naming nit remains." sat under `Approval recommended`. The sentence is scanned for `nit`,
   `minor`, `remain(s)`, and `consider`; a hit is triage-required, read as "read the body", not clean.
-  A concern word is cancelled by a negator or a resolution word (`fixed`, `addressed`, `resolved`) in
-  its own clause ("No minor issues remain." and "The minor nit was fixed." are clean),
+  A concern word is cancelled by a negator or a completed resolution (`was fixed`, `were addressed`,
+  `is resolved`) in its own clause ("No minor issues remain." and "The minor nit was fixed." are
+  clean). A negated or pending resolution ("was not fixed", "still needs to be fixed", "should be
+  addressed") is outstanding whatever else the clause holds, unless a negator comes first ("Nothing
+  needs to be addressed." is clean),
   and clauses break on punctuation and on "but", "only", and "other than", so "No blocking issues,
   but a nit remains." is not. Across "and" / "or", negation carries into a segment unless it opens
   with a determiner, number, or pronoun (its own subject), so "No minor or blocking issues remain."
