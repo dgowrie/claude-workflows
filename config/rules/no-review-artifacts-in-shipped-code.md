@@ -13,9 +13,16 @@ commit that can invalidate that approval.
   "bot-loop round", "suppressed finding", "Phase 2".
 - **Personal decomposition jargon**: "piece 1 / piece 2", "workstream A", "slice 3" -
   my private breakdown of a task, not a shared vocabulary.
+- **Plan-table row ids**: `2a`, `PR 5`, "PR 1 in its plan" - the row labels in a
+  PR-decomposition table. These count **even when the plan lives in a real, linked
+  issue**: a linked plan makes the ids feel like shared vocabulary, but a PR reader
+  still can't parse "2a should narrow on ..." or "Part of #N (PR 1 in its plan)"
+  without opening the plan. Name the work instead ("the grouped-by-service section
+  PRs") and link the plan once.
 
 Issue and PR numbers (`#1363`, `PR #1364`) are NOT artifacts - they resolve to something
-real and are fine to reference.
+real and are fine to reference. The giveaway is the `#`: `PR #1364` is a real PR; `PR 5`
+with no `#` is a plan-table row id and is jargon.
 
 ## The test
 
@@ -38,8 +45,15 @@ thread* may name the finding being answered - that is review-surface, not shippe
 
 Self-check before staging/committing, and before writing any outward PR or issue body -
 especially when a review loop preceded the commit, which is exactly when these labels are
-top of mind. Grep the staged diff for `\bF[0-9]\b`, `\bC[0-9]\b`, `\bpiece [0-9]`,
-`adversarial`, `suppressed`, `refuter`, `bot-loop`. Catching it pre-commit is the whole
-point: a fix after review means an extra commit and a re-review.
+top of mind. Grep the staged diff (or PR/issue body) for `\bF[0-9]\b`, `\bC[0-9]\b`,
+`\bpiece [0-9]`, `\b[0-9][a-z]\b`, `PR [0-9]\b`, `adversarial`, `suppressed`, `refuter`,
+`bot-loop`. The last two patterns (`\b[0-9][a-z]\b`, `PR [0-9]\b`) throw false positives;
+a hit means reread the sentence, not refuse it. Catching it pre-commit is the whole point:
+a fix after review means an extra commit and a re-review.
+
+The same check applies when **briefing a sub-agent** that will write commits or a PR/issue
+body: pass it the names of the work, not the plan ids. A sub-agent told to write "Part of
+#N (PR 1 in its plan)" carries that jargon straight into the outward text, and the orchestrating
+session owns the leak.
 
 Related: `self-correction-loop.md` (this rule was created from a correction).
