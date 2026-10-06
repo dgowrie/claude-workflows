@@ -240,9 +240,10 @@ detector learned them. It prints them as `body_only=N` and `headline="<verdict>:
   the finding appears. N is added to `body_only`.
 - **Counts must agree.** A count in the headline ("Three unresolved ...") that disagrees with
   `Findings: N` or `Open (N)` prints a warning that the format may have moved, and is triage-required.
-  A clause with a negator or completed resolution ("All three issues were resolved.") takes no part in
-  the cross-check, and only that clause: "Three blocking issues were found, but no nits remain." still
-  disagrees with `Findings: None`.
+  Each count is judged in its own clause and coordinated part, and a part with a negator or completed
+  resolution ("All three issues were resolved.") takes no part in the cross-check. A resolved count
+  hides nothing else: "Two issues were resolved and three concerns were identified." and "Three
+  blocking issues were found, but no nits remain." both still disagree with `Findings: None`.
 
 A headline finding has no thread to reply on, and a description that honestly lists deferred
 trade-offs can hold the headline at "Needs a closer look" indefinitely. Disposition it the way a

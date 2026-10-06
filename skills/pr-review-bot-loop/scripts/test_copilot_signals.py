@@ -517,6 +517,24 @@ class ClassificationTests(unittest.TestCase):
             "Nothing remains after the handler was fixed.")
         self.assertVerdict([review(HEAD, body=body)], signals.CLEAN)
 
+    def test_overview_resolved_count_does_not_hide_a_later_coordinated_count(self):
+        """Each count is judged in its own coordinated part: a resolved count
+        ("Two issues were resolved") must not excuse "three concerns" after it."""
+        for sentence in ("Two issues were resolved and three concerns were identified.",
+                         "Two issues were resolved or three concerns were identified.",
+                         "No one issue blocks this and three concerns were identified."):
+            with self.subTest(sentence=sentence):
+                body = OVERVIEW_CLEAN.replace(
+                    "The changes are fully reviewed, tested, and have no unresolved "
+                    "blocking issues.", sentence)
+                self.assertVerdict([review(HEAD, body=body)], signals.TRIAGE_REQUIRED)
+
+    def test_overview_two_resolved_counts_stay_clean(self):
+        body = OVERVIEW_CLEAN.replace(
+            "The changes are fully reviewed, tested, and have no unresolved blocking issues.",
+            "Two issues were resolved and three concerns were addressed.")
+        self.assertVerdict([review(HEAD, body=body)], signals.CLEAN)
+
     def test_overview_previously_missed_block_requires_triage(self):
         """Under a clean headline: the block is the only place the finding appears."""
         body = OVERVIEW_CLEAN + PREVIOUSLY_MISSED_BLOCK.format(count=1)

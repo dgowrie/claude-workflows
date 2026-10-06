@@ -362,23 +362,29 @@ def parse_overview(body, inline):
     if body_only:
         reasons.append(f"{body_only} body-only finding{'s' if body_only != 1 else ''}")
     # "All three issues were resolved." and "No one found any issues." hold a count
-    # word that is not a count of outstanding findings, so a clause with a negator or
-    # a completed resolution takes no part in the cross-check. Scoped to the clause
-    # holding the count: "Three blocking issues were found, but no nits remain." has
-    # a clean clause that must not hide the count in the other.
-    for clause in CLAUSE_BREAK.split(sentence):
-        count_match = HEADLINE_COUNT.search(clause)
-        if not count_match or NEGATOR.search(clause) or COMPLETED.search(clause):
+    # word that is not a count of outstanding findings, so a part with a negator or
+    # a completed resolution takes no part in the cross-check. Each count is judged
+    # in its own clause and coordinated part, and every count is checked: a resolved
+    # count must not hide a later one ("Two issues were resolved and three concerns
+    # were identified."), and a clean clause must not hide a count in another ("Three
+    # blocking issues were found, but no nits remain.").
+    parts = [part for clause in CLAUSE_BREAK.split(sentence) for part in COORDINATOR.split(clause)]
+    for part in parts:
+        if NEGATOR.search(part) or COMPLETED.search(part):
             continue
-        said = count_match.group("count").lower()
-        said = NUMBER_WORDS.get(said) or int(said)
-        # Only a count the body also declares can disagree with it.
-        disagreeing = [n for n in (declared, open_count) if n is not None and n != said]
-        if disagreeing:
-            mismatch = f"headline says {said} but the body declares {disagreeing[0]}"
-            reasons.append(mismatch)
-            warnings.append(mismatch)
-            break
+        for count_match in HEADLINE_COUNT.finditer(part):
+            said = count_match.group("count").lower()
+            said = NUMBER_WORDS.get(said) or int(said)
+            # Only a count the body also declares can disagree with it.
+            disagreeing = [n for n in (declared, open_count) if n is not None and n != said]
+            if disagreeing:
+                mismatch = f"headline says {said} but the body declares {disagreeing[0]}"
+                reasons.append(mismatch)
+                warnings.append(mismatch)
+                break
+        else:
+            continue
+        break
     return Overview(verdict, sentence, declared, open_count, body_only, reasons, warnings)
 
 
