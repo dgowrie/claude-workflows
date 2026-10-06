@@ -91,6 +91,74 @@ REVIEW_DETAILS_CLEAN_MENTIONS_SUPPRESS = (
     "</details>"
 )
 
+# The `ccr-overview-v2` body layout. Findings can live in the headline, a
+# "Review findings" list, or a per-file table cell, none of which is an inline
+# comment or a suppressed block, so every shape below read as CLEAN before the
+# overview parse existed. The bodies are synthetic: the observed PRs are private.
+OVERVIEW_MARKER = "<!-- ccr-overview-v2 -->\n\n## Copilot review overview\n\n"
+OVERVIEW_CLEAN = (
+    OVERVIEW_MARKER + "### 🟢 Approval recommended\n\n"
+    "The changes are fully reviewed, tested, and have no unresolved blocking issues.\n\n"
+    "**Review effort:** Lite\n**Findings:** None\n"
+)
+# A headline-only concern: the one place the finding appears is the sentence.
+OVERVIEW_HEADLINE_CONCERN = (
+    OVERVIEW_MARKER + "### 🔵 Needs a closer look\n\n"
+    "The boundary case in the changed component is not handled.\n\n"
+    "**Review effort:** Lite\n**Findings:** None\n\n"
+    "<details>\n<summary><strong>What changed in this PR</strong></summary>\n\n"
+    "A summary paragraph.\n\n| File | Reviewed changes |\n|---|---|\n"
+    "| `src/a.ts` | Reworked the handler. |\n</details>\n"
+)
+# A green verdict whose sentence still names a leftover nit.
+OVERVIEW_CLEAN_VERDICT_WITH_NIT = (
+    OVERVIEW_MARKER + "### 🟢 Approval recommended\n\n"
+    "No blocking issues were identified; only a minor test naming nit remains.\n\n"
+    "**Review effort:** Lite\n**Findings:** None\n"
+)
+OVERVIEW_REVIEW_FINDINGS_LIST = (
+    OVERVIEW_MARKER + "### 🟡 Changes recommended\n\n"
+    "A moderate issue affects the handler.\n\n"
+    "**Findings:** None\n\n"
+    "<details>\n<summary><strong>What changed in this PR</strong></summary>\n\n"
+    "**Review findings:**\n"
+    "- **Moderate (2 votes):** the handler drops errors.\n"
+    "- **Moderate (1 vote):** the retry has no cap.\n\n"
+    "A summary paragraph.\n</details>\n"
+)
+# Finding C has no inline thread and is absent from Open (N); only the per-file
+# cell and the headline count betray it.
+OVERVIEW_TABLE_ONLY_FINDING = (
+    OVERVIEW_MARKER + "### 🟡 Changes recommended\n\n"
+    "Three unresolved moderate issues affect two areas.\n\n"
+    "**Review effort:** Lite\n**Findings:** 2 moderate\n\n"
+    "<details open>\n<summary><strong>Open (2)</strong></summary>\n\n"
+    "- moderate [Finding A](#discussion_r1) · New\n"
+    "- moderate [Finding B](#discussion_r2) · New\n</details>\n\n"
+    "<details>\n<summary><strong>What changed in this PR</strong></summary>\n\n"
+    "| File | Summary |\n|---|---|\n"
+    "| `src/one.ts` | Change. Moderate issue: Finding B (2 votes). |\n"
+    "| `src/two.ts` | Change. Moderate issues: Finding A (2 votes), and Finding C (1 vote). |\n"
+    "</details>\n"
+)
+# A green verdict, but a vote-tagged finding that nothing else accounts for.
+OVERVIEW_CLEAN_VERDICT_TABLE_FINDING = (
+    OVERVIEW_CLEAN + "\n<details>\n<summary><strong>What changed in this PR</strong></summary>\n\n"
+    "| File | Summary |\n|---|---|\n"
+    "| `src/one.ts` | Change. Moderate issue: Finding C (1 vote). |\n</details>\n"
+)
+# Resolved threads keep their vote tags; they were already triaged and must not
+# keep a clean round dirty.
+OVERVIEW_CLEAN_WITH_RESOLVED = (
+    OVERVIEW_CLEAN + "\n<details>\n"
+    "<summary><strong>Resolved since last review (1)</strong></summary>\n\n"
+    "- moderate [Finding A](#discussion_r1) (2 votes)\n</details>\n"
+)
+OVERVIEW_UNKNOWN_HEADLINE = (
+    OVERVIEW_MARKER + "### 🟣 Looks different today\n\nSomething.\n\n**Findings:** None\n"
+)
+OVERVIEW_NO_HEADLINE = OVERVIEW_MARKER + "**Review effort:** Lite\n**Findings:** None\n"
+
 
 def review(oid, inline=0, body="", when="2026-01-01T00:00:00Z",
            login="copilot-pull-request-reviewer", typename="Bot"):
@@ -248,6 +316,56 @@ class ClassificationTests(unittest.TestCase):
         self.assertVerdict(
             [review(OLD, body=SUPPRESSED_TWO), review(HEAD)], signals.CLEAN)
 
+    def test_overview_known_clean_headline_is_clean(self):
+        self.assertVerdict([review(HEAD, body=OVERVIEW_CLEAN)], signals.CLEAN)
+
+    def test_overview_headline_concern_with_no_findings_requires_triage(self):
+        """The headline is the only place the finding appears: no inline comment,
+        `Findings: None`, no suppressed block. Read as clean, it ended the loop."""
+        self.assertVerdict([review(HEAD, body=OVERVIEW_HEADLINE_CONCERN)],
+                           signals.TRIAGE_REQUIRED)
+
+    def test_overview_clean_verdict_naming_a_remaining_nit_requires_triage(self):
+        self.assertVerdict([review(HEAD, body=OVERVIEW_CLEAN_VERDICT_WITH_NIT)],
+                           signals.TRIAGE_REQUIRED)
+
+    def test_overview_review_findings_list_requires_triage(self):
+        self.assertVerdict([review(HEAD, body=OVERVIEW_REVIEW_FINDINGS_LIST)],
+                           signals.TRIAGE_REQUIRED)
+
+    def test_overview_table_only_finding_requires_triage(self):
+        self.assertVerdict([review(HEAD, body=OVERVIEW_TABLE_ONLY_FINDING)],
+                           signals.TRIAGE_REQUIRED)
+
+    def test_overview_vote_tagged_finding_under_a_clean_headline_requires_triage(self):
+        """Isolates the vote count from the headline: the verdict is the known-clean
+        one and `Findings: None`, so only the per-file cell can trigger this."""
+        self.assertVerdict([review(HEAD, body=OVERVIEW_CLEAN_VERDICT_TABLE_FINDING)],
+                           signals.TRIAGE_REQUIRED)
+
+    def test_overview_unknown_headline_fails_closed(self):
+        self.assertVerdict([review(HEAD, body=OVERVIEW_UNKNOWN_HEADLINE)],
+                           signals.TRIAGE_REQUIRED)
+
+    def test_overview_without_a_parsable_headline_fails_closed(self):
+        self.assertVerdict([review(HEAD, body=OVERVIEW_NO_HEADLINE)],
+                           signals.TRIAGE_REQUIRED)
+
+    def test_overview_resolved_since_last_review_votes_do_not_keep_the_loop_dirty(self):
+        self.assertVerdict([review(HEAD, body=OVERVIEW_CLEAN_WITH_RESOLVED)],
+                           signals.CLEAN)
+
+    def test_overview_clean_headline_saying_no_remaining_issues_stays_clean(self):
+        """"remaining" is common clean prose; only "remain(s)" is a concern signal."""
+        body = OVERVIEW_CLEAN.replace(
+            "have no unresolved blocking issues.", "have no remaining blocking issues.")
+        self.assertVerdict([review(HEAD, body=body)], signals.CLEAN)
+
+    def test_overview_marker_is_scoped_to_the_review_at_head(self):
+        self.assertVerdict(
+            [review(OLD, body=OVERVIEW_HEADLINE_CONCERN), review(HEAD, body=OVERVIEW_CLEAN)],
+            signals.CLEAN)
+
 
 class ReportTests(unittest.TestCase):
     """The printed report is the other half of the interface.
@@ -302,6 +420,32 @@ class ReportTests(unittest.TestCase):
         """count sums declared blocks while findings span all of them."""
         self.assertNotIn("WARNING", self.report(
             [review(HEAD, body=SUPPRESSED_UNDECLARED + "\n" + SUPPRESSED_EMPTY)]))
+
+    def test_prints_the_headline_so_a_headline_only_triage_is_readable(self):
+        out = self.report([review(HEAD, body=OVERVIEW_HEADLINE_CONCERN)])
+        self.assertIn('headline="Needs a closer look: '
+                      'The boundary case in the changed component is not handled."', out)
+
+    def test_reports_an_unparsable_headline_instead_of_crashing(self):
+        out = self.report([review(HEAD, body=OVERVIEW_NO_HEADLINE)])
+        self.assertIn("headline=UNPARSABLE", out)
+
+    def test_prints_body_only_count_as_its_own_field(self):
+        out = self.report([review(HEAD, body=OVERVIEW_TABLE_ONLY_FINDING)])
+        self.assertIn("inline=0 suppressed=none body_only=1", out)
+
+    def test_body_only_is_not_applicable_without_the_overview_layout(self):
+        self.assertIn("body_only=n/a", self.report([review(HEAD, body=BENIGN)]))
+
+    def test_names_the_reasons_in_the_triage_line(self):
+        out = self.report([review(HEAD, body=OVERVIEW_HEADLINE_CONCERN)])
+        self.assertIn("TRIAGE REQUIRED", out)
+        self.assertIn("Needs a closer look", out.splitlines()[-1])
+
+    def test_warns_when_headline_count_disagrees_with_declared_count(self):
+        out = self.report([review(HEAD, body=OVERVIEW_TABLE_ONLY_FINDING)])
+        self.assertIn("WARNING: headline says 3", out)
+        self.assertIn("format may have moved", out)
 
 
 class ErrorPathTests(unittest.TestCase):
@@ -416,6 +560,53 @@ class ParserTests(unittest.TestCase):
         self.assertIsNone(count)
         self.assertEqual(findings, [])
         self.assertEqual(labels, [])
+
+
+class OverviewParserTests(unittest.TestCase):
+    def test_body_without_the_marker_is_not_an_overview(self):
+        self.assertIsNone(signals.parse_overview(REVIEW_DETAILS_SUPPRESSED, inline=0))
+
+    def test_extracts_verdict_and_sentence_without_the_emoji(self):
+        overview = signals.parse_overview(OVERVIEW_HEADLINE_CONCERN, inline=0)
+        self.assertEqual(overview.verdict, "Needs a closer look")
+        self.assertEqual(overview.sentence,
+                         "The boundary case in the changed component is not handled.")
+
+    def test_known_clean_sample_has_no_reasons(self):
+        overview = signals.parse_overview(OVERVIEW_CLEAN, inline=0)
+        self.assertEqual(overview.reasons, [])
+        self.assertEqual(overview.body_only, 0)
+
+    def test_counts_review_findings_list_items(self):
+        overview = signals.parse_overview(OVERVIEW_REVIEW_FINDINGS_LIST, inline=0)
+        self.assertEqual(overview.body_only, 2)
+
+    def test_table_only_finding_is_the_surplus_over_open(self):
+        overview = signals.parse_overview(OVERVIEW_TABLE_ONLY_FINDING, inline=0)
+        self.assertEqual((overview.declared, overview.open_count, overview.body_only),
+                         (2, 2, 1))
+
+    def test_inline_threads_account_for_body_findings(self):
+        """Inline comments are already triage-required; they also stop the same
+        finding from being counted twice as body-only."""
+        overview = signals.parse_overview(OVERVIEW_REVIEW_FINDINGS_LIST, inline=3)
+        self.assertEqual(overview.body_only, 0)
+
+    def test_headline_count_disagreeing_with_declared_count_is_a_reason(self):
+        overview = signals.parse_overview(OVERVIEW_TABLE_ONLY_FINDING, inline=0)
+        self.assertTrue(any("headline says 3" in reason for reason in overview.reasons))
+
+    def test_spelled_out_and_numeric_headline_counts_both_parse(self):
+        for sentence in ("Three unresolved issues remain.", "3 unresolved issues remain."):
+            with self.subTest(sentence=sentence):
+                body = OVERVIEW_TABLE_ONLY_FINDING.replace(
+                    "Three unresolved moderate issues affect two areas.", sentence)
+                overview = signals.parse_overview(body, inline=0)
+                self.assertTrue(any("headline says 3" in reason for reason in overview.reasons))
+
+    def test_a_future_marker_version_is_still_parsed(self):
+        body = OVERVIEW_HEADLINE_CONCERN.replace("ccr-overview-v2", "ccr-overview-v3")
+        self.assertIsNotNone(signals.parse_overview(body, inline=0))
 
 
 class ArgumentTests(unittest.TestCase):

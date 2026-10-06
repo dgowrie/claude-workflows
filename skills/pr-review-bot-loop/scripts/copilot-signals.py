@@ -21,6 +21,12 @@ Inline comments fold into exit 1 alongside suppressed ones so that exit 0 is saf
 to read as "terminate". Both need the same loop action; the printout separates
 them.
 
+A `ccr-overview-vN` body can carry a finding in neither place: in the headline
+verdict or its sentence, in a "Review findings" list, or in a vote-tagged mention
+in the per-file table. Those fold into exit 1 too and print as `body_only=N` and
+`headline="..."`. Only the known-clean verdict, with nothing else in the body,
+stays clean; an unknown verdict or an unreadable layout is triage-required.
+
 Known bound: the query reads the newest 50 reviews. Each thread reply posted over
 REST adds an author-authored review artifact, so a PR that accumulated more than
 50 of them after its head review would push that review out of the window and
@@ -146,6 +152,133 @@ def parse_suppressed(body):
     return count, findings, labels, undeclared
 
 
+# The overview layout (`<!-- ccr-overview-v2 -->`) reports findings in three places
+# that are neither an inline comment nor a suppressed block: the headline verdict
+# and its sentence, a "Review findings" bullet list, and vote-tagged mentions in
+# the per-file table. Each was observed reading CLEAN with a real concern in it,
+# including under a green verdict, so the parse fails closed: only a verdict on the
+# allow-list, with nothing else in the body, is clean. The allow-list holds the one
+# verdict observed on a genuinely clean review; any other text is triage-required
+# until a second clean sample is captured.
+OVERVIEW_MARKER = re.compile(r"<!--\s*ccr-overview-v\d+\s*-->")
+CLEAN_VERDICTS = {"approval recommended"}
+VERDICT_HEADING = re.compile(r"^###[ \t]+(?P<heading>.+?)[ \t]*$", re.MULTILINE)
+# A sentence under a clean verdict that still names something outstanding. Tight
+# on purpose: "remaining" is common in clean prose ("no remaining issues"), so only
+# "remain(s)" counts, and the list is a heuristic that fails toward triage.
+CONCERN_PROSE = re.compile(r"\bnits?\b|\bminor\b|\bremains?\b|\bconsider\b", re.IGNORECASE)
+DECLARED_FINDINGS = re.compile(r"\*\*Findings:\*\*[ \t]*(?:(?P<count>\d+)|(?P<none>none))", re.IGNORECASE)
+OPEN_COUNT = re.compile(r"\bOpen\s*\((\d+)\)", re.IGNORECASE)
+RESOLVED_LABEL = re.compile(r"\bResolved\b", re.IGNORECASE)
+REVIEW_FINDINGS_LIST = re.compile(r"\*\*Review findings:\*\*[ \t]*\n(?P<items>(?:[ \t]*[-*][ \t]+.*(?:\n|$))+)")
+VOTE_TAG = re.compile(r"\((\d+)\s+votes?\)", re.IGNORECASE)
+NUMBER_WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+                "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10}
+HEADLINE_COUNT = re.compile(
+    r"\b(?P<count>\d+|" + "|".join(NUMBER_WORDS) + r")\s+(?:\w+\s+){0,3}?"
+    r"(?:issues?|findings?|concerns?|problems?|bugs?)\b",
+    re.IGNORECASE,
+)
+
+
+class Overview:
+    """What an overview-layout body says outside inline comments and suppressed blocks.
+
+    `body_only` is a lower bound. Inline comments and `Open (N)` both account for
+    some findings, but one finding can become several inline comments, so the
+    subtraction can hide a body-only finding while inline comments exist. That is
+    harmless to the verdict, which already requires triage on any inline comment,
+    and it is exact in the case this exists for: zero inline comments.
+    """
+
+    def __init__(self, verdict, sentence, declared, open_count, body_only, reasons, warnings):
+        self.verdict = verdict
+        self.sentence = sentence
+        self.declared = declared
+        self.open_count = open_count
+        self.body_only = body_only
+        self.reasons = reasons
+        self.warnings = warnings
+
+
+def _strip_emoji_prefix(heading):
+    return re.sub(r"^[^\w]+", "", heading).strip()
+
+
+def parse_overview(body, inline):
+    """Return an Overview for a `ccr-overview-vN` body, or None for any other body.
+
+    `reasons` is empty only when the headline is on the clean allow-list and
+    nothing else in the body carries a finding. Every other outcome, including a
+    layout this parser cannot read, carries a reason: a parse that cannot tell is
+    triage-required, never clean.
+    """
+    marker = OVERVIEW_MARKER.search(body)
+    if not marker:
+        return None
+    text = body[marker.end():]
+    top_level = DETAILS_BLOCK.sub("", text)
+    reasons = []
+    warnings = []
+
+    heading = VERDICT_HEADING.search(top_level)
+    verdict, sentence = None, ""
+    if heading:
+        verdict = _strip_emoji_prefix(heading.group("heading"))
+        # The sentence is the first paragraph after the heading, unless that
+        # paragraph is already the bold metadata rows ("**Review effort:** ...").
+        paragraphs = [p.strip() for p in re.split(r"\n\s*\n", top_level[heading.end():]) if p.strip()]
+        if paragraphs and not paragraphs[0].startswith(("**", "<")):
+            sentence = " ".join(paragraphs[0].split())
+
+    declared_match = DECLARED_FINDINGS.search(top_level)
+    declared = None
+    if declared_match:
+        declared = int(declared_match.group("count")) if declared_match.group("count") else 0
+
+    open_count = None
+    counted_blocks = []
+    for block in DETAILS_BLOCK.finditer(text):
+        summary = block.group("summary")
+        open_match = OPEN_COUNT.search(summary)
+        if open_match:
+            open_count = (open_count or 0) + int(open_match.group(1))
+        # Resolved threads keep their vote tags. They were triaged in an earlier
+        # round, so counting them keeps every clean round dirty forever.
+        if not RESOLVED_LABEL.search(summary):
+            counted_blocks.append(block.group(0))
+    countable = DETAILS_BLOCK.sub("", text) + "\n" + "\n".join(counted_blocks)
+
+    list_match = REVIEW_FINDINGS_LIST.search(countable)
+    list_items = len(re.findall(r"^[ \t]*[-*][ \t]+", list_match.group("items"), re.MULTILINE)) if list_match else 0
+    body_findings = max(list_items, len(VOTE_TAG.findall(countable)))
+    body_only = max(0, body_findings - max(open_count or 0, inline))
+
+    if verdict is None:
+        reasons.append("an overview body with no parsable headline")
+    elif verdict.casefold().rstrip(".!") not in CLEAN_VERDICTS:
+        reasons.append(f'headline verdict "{verdict}" is not a known-clean verdict')
+    elif CONCERN_PROSE.search(sentence):
+        reasons.append("the headline sentence names something outstanding")
+    if declared:
+        reasons.append(f"declares {declared} finding{'s' if declared != 1 else ''}")
+    if open_count:
+        reasons.append(f"lists {open_count} open")
+    if body_only:
+        reasons.append(f"{body_only} body-only finding{'s' if body_only != 1 else ''}")
+    count_match = HEADLINE_COUNT.search(sentence)
+    if count_match:
+        said = count_match.group("count").lower()
+        said = NUMBER_WORDS.get(said) or int(said)
+        # Only a count the body also declares can disagree with it.
+        disagreeing = [n for n in (declared, open_count) if n is not None and n != said]
+        if disagreeing:
+            mismatch = f"headline says {said} but the body declares {disagreeing[0]}"
+            reasons.append(mismatch)
+            warnings.append(mismatch)
+    return Overview(verdict, sentence, declared, open_count, body_only, reasons, warnings)
+
+
 def fetch(owner, repo, number):
     result = subprocess.run(
         ["gh", "api", "graphql", "-f", f"query={QUERY}",
@@ -218,6 +351,7 @@ def main():
         oid = (review["commit"] or {}).get("oid")
         count, findings, labels, undeclared = parse_suppressed(review["body"] or "")
         inline = review["comments"]["totalCount"]
+        overview = parse_overview(review["body"] or "", inline)
         where = "AT HEAD" if oid == head else f"at {oid[:7] if oid else 'unknown'}"
         if not labels:
             shown = "none"
@@ -227,8 +361,20 @@ def main():
             shown = f"{count} declared plus an undeclared block via {labels}"
         else:
             shown = f"{count} via {labels}"
+        body_only = "n/a" if overview is None else overview.body_only
         print(f"\n=== review {review['submittedAt']} {where} "
-              f"inline={inline} suppressed={shown}")
+              f"inline={inline} suppressed={shown} body_only={body_only}")
+        if overview is not None:
+            # A headline-only concern has no thread and no suppressed block, so an
+            # exit 1 caused by it alone is unreadable without the sentence.
+            if overview.verdict is None:
+                print("  headline=UNPARSABLE")
+            else:
+                headline = f"{overview.verdict}: {overview.sentence}" if overview.sentence else overview.verdict
+                print(f'  headline="{headline[:300]}"')
+            for warning in overview.warnings:
+                print(f"  WARNING: {warning}; the format may have moved, "
+                      f"read the review body directly")
         for path, text in findings:
             print(f"  - {path}: {text[:300]}")
         # Only meaningful when every block declared a count; with a mixed body
@@ -242,7 +388,8 @@ def main():
         # not a contract. Decide on the most recently submitted one explicitly.
         submitted = review["submittedAt"] or ""
         if oid == head and submitted >= at_head_submitted:
-            at_head = (inline, count, labels, len(findings), undeclared)
+            at_head = (inline, count, labels, len(findings), undeclared,
+                       overview.reasons if overview else [])
             at_head_submitted = submitted
 
     # Only the review at head decides the loop. A historical review's suppressed
@@ -254,7 +401,7 @@ def main():
               "re-review on push, so this is silent abandonment, not clean. "
               "Re-request, or wait if one is already pending.")
         return NOT_APPLICABLE
-    inline, count, labels, parsed, undeclared = at_head
+    inline, count, labels, parsed, undeclared, overview_reasons = at_head
     if not labels:
         withheld = "no suppressed block"
     elif undeclared:
@@ -268,8 +415,9 @@ def main():
     # a silent zero, which is the failure this signal exists to prevent, and it is
     # the assertive kind: the mismatch means the body format moved and the parse
     # is no longer trustworthy in either direction.
-    if inline or parsed or undeclared or (labels and (count is None or count > 0)):
-        print(f"\nTRIAGE REQUIRED: {inline} inline, {withheld}.")
+    if inline or parsed or undeclared or overview_reasons or (labels and (count is None or count > 0)):
+        overview_detail = f"; overview: {'; '.join(overview_reasons)}" if overview_reasons else ""
+        print(f"\nTRIAGE REQUIRED: {inline} inline, {withheld}{overview_detail}.")
         return TRIAGE_REQUIRED
     print("\nCLEAN: a review at head posted nothing and withheld nothing.")
     return CLEAN
