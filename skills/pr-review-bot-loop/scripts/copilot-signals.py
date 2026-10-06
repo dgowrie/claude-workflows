@@ -201,8 +201,12 @@ NEGATED_RESOLUTION = re.compile(
 PENDING_RESOLUTION = re.compile(
     r"\b(?:needs?|needed|should|must|could|would|might|unless|until|before|to\s+be)\b"
     r"\s+(?:\w+\s+){0,3}?" + RESOLUTION, re.IGNORECASE)
+# Sentence dashes break a clause like a comma. Built from code points rather than
+# written out, and a bare hyphen only counts when spaced ("well-scoped" must not).
+SENTENCE_DASHES = "".join(chr(code) for code in (8211, 8212, 8213))
 CLAUSE_BREAK = re.compile(
-    r"[;:,.]|\b(?:but|however|except|only|though|although|other\s+than|apart\s+from)\b",
+    r"[;:,.]|[" + SENTENCE_DASHES + r"]|\s-{1,2}\s"
+    r"|\b(?:but|however|except|only|though|although|other\s+than|apart\s+from)\b",
     re.IGNORECASE,
 )
 COORDINATOR = re.compile(r"\b(?:and|or)\b", re.IGNORECASE)

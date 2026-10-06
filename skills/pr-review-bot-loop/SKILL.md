@@ -217,7 +217,8 @@ detector learned them. It prints them as `body_only=N` and `headline="<verdict>:
   clean). A negated or pending resolution ("was not fixed", "still needs to be fixed", "should be
   addressed") is outstanding whatever else the clause holds, unless a negator comes first ("Nothing
   needs to be addressed." is clean),
-  and clauses break on punctuation and on "but", "only", and "other than", so "No blocking issues,
+  and clauses break on punctuation, sentence dashes (a spaced hyphen or a Unicode dash, not
+  "well-scoped"), and "but", "only", and "other than", so "No blocking issues,
   but a nit remains." is not. Across "and" / "or", negation carries into a segment unless it opens
   with a determiner, number, or pronoun (its own subject), so "No minor or blocking issues remain."
   is clean and "No blocking issues were identified and a minor nit remains." is not. A leftover with

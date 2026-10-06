@@ -475,6 +475,24 @@ class ClassificationTests(unittest.TestCase):
             "All three issues were resolved, and no nits remain.")
         self.assertVerdict([review(HEAD, body=body)], signals.CLEAN)
 
+    def test_overview_dash_separated_leftover_requires_triage(self):
+        """A sentence dash joins a negated clause to a positive one the same way
+        "but" does. The Unicode dashes are built from code points on purpose."""
+        en_dash, em_dash = chr(8211), chr(8212)
+        for dash in (" - ", " -- ", f" {en_dash} ", f" {em_dash} ", em_dash):
+            with self.subTest(dash=dash):
+                body = OVERVIEW_CLEAN.replace(
+                    "The changes are fully reviewed, tested, and have no unresolved "
+                    "blocking issues.",
+                    f"No blocking issues were identified{dash}a minor nit remains.")
+                self.assertVerdict([review(HEAD, body=body)], signals.TRIAGE_REQUIRED)
+
+    def test_overview_hyphenated_words_are_not_clause_breaks(self):
+        body = OVERVIEW_CLEAN.replace(
+            "The changes are fully reviewed, tested, and have no unresolved blocking issues.",
+            "No blocking issues, and the follow-up work is well-scoped.")
+        self.assertVerdict([review(HEAD, body=body)], signals.CLEAN)
+
     def test_overview_previously_missed_block_requires_triage(self):
         """Under a clean headline: the block is the only place the finding appears."""
         body = OVERVIEW_CLEAN + PREVIOUSLY_MISSED_BLOCK.format(count=1)
