@@ -167,6 +167,14 @@ OVERVIEW_FINDING_IN_LIST_AND_TABLE = (
     "| `src/a.ts` | Change. Moderate issue: the handler drops errors (2 votes). |\n"
     "</details>\n"
 )
+# A finding carried only by a standalone "Previously missed (N)" block: no inline
+# thread, no vote tag, and `Findings: None` above it.
+PREVIOUSLY_MISSED_BLOCK = (
+    "\n<details>\n<summary><strong>Previously missed ({count})</strong></summary>\n\n"
+    "In code that hasn't changed since last review\n\n"
+    "<details>\n<summary>Avoid counting resolved mentions as findings</summary>\n\n"
+    "`src/a.py:208`\n\nThe helper treats every number as a count.\n</details>\n</details>\n"
+)
 OVERVIEW_UNKNOWN_HEADLINE = (
     OVERVIEW_MARKER + "### 🟣 Looks different today\n\nSomething.\n\n**Findings:** None\n"
 )
@@ -405,6 +413,37 @@ class ClassificationTests(unittest.TestCase):
                     "blocking issues.", sentence)
                 self.assertVerdict([review(HEAD, body=body)], signals.TRIAGE_REQUIRED)
 
+    def test_overview_resolved_or_negated_statements_stay_clean(self):
+        """A count word beside "resolved" or "no" is not a count of outstanding
+        findings, and a nit that "was fixed" is not outstanding."""
+        for sentence in ("All three issues were resolved.",
+                         "No one found any issues.",
+                         "The minor nit was fixed.",
+                         "Two nits were addressed in the last round."):
+            with self.subTest(sentence=sentence):
+                body = OVERVIEW_CLEAN.replace(
+                    "The changes are fully reviewed, tested, and have no unresolved "
+                    "blocking issues.", sentence)
+                self.assertVerdict([review(HEAD, body=body)], signals.CLEAN)
+
+    def test_overview_a_fixed_item_does_not_hide_one_that_remains(self):
+        for sentence in ("Two nits were fixed and one remains.",
+                         "The nit was fixed, but another minor issue remains."):
+            with self.subTest(sentence=sentence):
+                body = OVERVIEW_CLEAN.replace(
+                    "The changes are fully reviewed, tested, and have no unresolved "
+                    "blocking issues.", sentence)
+                self.assertVerdict([review(HEAD, body=body)], signals.TRIAGE_REQUIRED)
+
+    def test_overview_previously_missed_block_requires_triage(self):
+        """Under a clean headline: the block is the only place the finding appears."""
+        body = OVERVIEW_CLEAN + PREVIOUSLY_MISSED_BLOCK.format(count=1)
+        self.assertVerdict([review(HEAD, body=body)], signals.TRIAGE_REQUIRED)
+
+    def test_overview_previously_missed_zero_is_clean(self):
+        body = OVERVIEW_CLEAN + PREVIOUSLY_MISSED_BLOCK.format(count=0)
+        self.assertVerdict([review(HEAD, body=body)], signals.CLEAN)
+
     def test_overview_marker_is_scoped_to_the_review_at_head(self):
         self.assertVerdict(
             [review(OLD, body=OVERVIEW_HEADLINE_CONCERN), review(HEAD, body=OVERVIEW_CLEAN)],
@@ -629,6 +668,10 @@ class OverviewParserTests(unittest.TestCase):
         overview = signals.parse_overview(OVERVIEW_TABLE_ONLY_FINDING, inline=0)
         self.assertEqual((overview.declared, overview.open_count, overview.body_only),
                          (2, 2, 1))
+
+    def test_previously_missed_findings_count_as_body_only(self):
+        body = OVERVIEW_CLEAN + PREVIOUSLY_MISSED_BLOCK.format(count=2)
+        self.assertEqual(signals.parse_overview(body, inline=0).body_only, 2)
 
     def test_one_finding_in_both_list_and_table_counts_once(self):
         overview = signals.parse_overview(OVERVIEW_FINDING_IN_LIST_AND_TABLE, inline=0)

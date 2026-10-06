@@ -183,7 +183,15 @@ VERDICT_HEADING = re.compile(r"^###[ \t]+(?P<heading>.+?)[ \t]*$", re.MULTILINE)
 # opening continues the previous clause and inherits its negation. A leftover
 # phrased without a determiner ("and minor nit remains") is the miss this leaves.
 CONCERN_PROSE = re.compile(r"\bnits?\b|\bminor\b|\bremains?\b|\bconsider\b", re.IGNORECASE)
-NEGATOR = re.compile(r"\b(?:no|not|none|nothing|without|never|neither|nor)\b|n't", re.IGNORECASE)
+#
+# A resolution word cancels a concern word the same way a negator does: "The minor
+# nit was fixed." names nothing outstanding. "unresolved" does not match, since
+# \bresolved needs a word boundary before it.
+CANCELLER = re.compile(
+    r"\b(?:no|not|none|nothing|without|never|neither|nor"
+    r"|resolved|fixed|addressed|handled|corrected)\b|n't",
+    re.IGNORECASE,
+)
 CLAUSE_BREAK = re.compile(
     r"[;:,.]|\b(?:but|however|except|only|though|although|other\s+than|apart\s+from)\b",
     re.IGNORECASE,
@@ -197,6 +205,10 @@ NEW_CLAUSE_OPENING = re.compile(
 )
 DECLARED_FINDINGS = re.compile(r"\*\*Findings:\*\*[ \t]*(?:(?P<count>\d+)|(?P<none>none))", re.IGNORECASE)
 OPEN_COUNT = re.compile(r"\bOpen\s*\((\d+)\)", re.IGNORECASE)
+# A standalone block of findings in code the review says did not change. It has no
+# inline thread and no vote tag, so under a green headline it is the only place the
+# finding appears.
+PREVIOUSLY_MISSED = re.compile(r"\bPreviously\s+missed\s*\((\d+)\)", re.IGNORECASE)
 RESOLVED_LABEL = re.compile(r"\bResolved\b", re.IGNORECASE)
 REVIEW_FINDINGS_LIST = re.compile(r"\*\*Review findings:\*\*[ \t]*\n(?P<items>(?:[ \t]*[-*][ \t]+.*(?:\n|$))+)")
 VOTE_TAG = re.compile(r"\((\d+)\s+votes?\)", re.IGNORECASE)
@@ -232,13 +244,13 @@ class Overview:
 
 
 def names_outstanding(sentence):
-    """True when some clause of `sentence` has a concern word and no negator."""
+    """True when some clause of `sentence` has a concern word and nothing cancelling it."""
     for segment in CLAUSE_BREAK.split(sentence):
         negated = False
         for position, part in enumerate(COORDINATOR.split(segment)):
             if position == 0 or NEW_CLAUSE_OPENING.match(part):
                 negated = False
-            negated = negated or bool(NEGATOR.search(part))
+            negated = negated or bool(CANCELLER.search(part))
             if CONCERN_PROSE.search(part) and not negated:
                 return True
     return False
@@ -280,9 +292,13 @@ def parse_overview(body, inline):
         declared = int(declared_match.group("count")) if declared_match.group("count") else 0
 
     open_count = None
+    previously_missed = 0
     counted_blocks = []
     for block in DETAILS_BLOCK.finditer(text):
         summary = block.group("summary")
+        missed_match = PREVIOUSLY_MISSED.search(summary)
+        if missed_match:
+            previously_missed += int(missed_match.group(1))
         open_match = OPEN_COUNT.search(summary)
         if open_match:
             open_count = (open_count or 0) + int(open_match.group(1))
@@ -305,7 +321,7 @@ def parse_overview(body, inline):
     else:
         list_items, outside_list = 0, countable
     body_findings = max(list_items, len(VOTE_TAG.findall(outside_list)))
-    body_only = max(0, body_findings - max(open_count or 0, inline))
+    body_only = max(0, body_findings - max(open_count or 0, inline)) + previously_missed
 
     # Parsed best-effort, never trusted: a later version can move findings
     # somewhere this parser does not read, so its headline cannot clear a review.
@@ -325,7 +341,10 @@ def parse_overview(body, inline):
     if body_only:
         reasons.append(f"{body_only} body-only finding{'s' if body_only != 1 else ''}")
     count_match = HEADLINE_COUNT.search(sentence)
-    if count_match:
+    # "All three issues were resolved." and "No one found any issues." hold a count
+    # word that is not a count of outstanding findings, so a cancelled sentence
+    # takes no part in the cross-check.
+    if count_match and not CANCELLER.search(sentence):
         said = count_match.group("count").lower()
         said = NUMBER_WORDS.get(said) or int(said)
         # Only a count the body also declares can disagree with it.

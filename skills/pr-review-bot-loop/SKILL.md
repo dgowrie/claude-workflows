@@ -212,7 +212,8 @@ detector learned them. It prints them as `body_only=N` and `headline="<verdict>:
 - **A green verdict can still carry a finding.** "No blocking issues were identified; only a minor
   test naming nit remains." sat under `Approval recommended`. The sentence is scanned for `nit`,
   `minor`, `remain(s)`, and `consider`; a hit is triage-required, read as "read the body", not clean.
-  A concern word is cancelled by a negator in its own clause ("No minor issues remain." is clean),
+  A concern word is cancelled by a negator or a resolution word (`fixed`, `addressed`, `resolved`) in
+  its own clause ("No minor issues remain." and "The minor nit was fixed." are clean),
   and clauses break on punctuation and on "but", "only", and "other than", so "No blocking issues,
   but a nit remains." is not. Across "and" / "or", negation carries into a segment unless it opens
   with a determiner, number, or pronoun (its own subject), so "No minor or blocking issues remain."
@@ -229,8 +230,13 @@ detector learned them. It prints them as `body_only=N` and `headline="<verdict>:
   since those were triaged in an earlier round. The number is approximate (one finding can become
   several inline comments, and one repeated within the table can overcount); the verdict depends
   only on whether it is non-zero.
+- **A `Previously missed (N)` block is a finding.** It holds findings in code the review says did
+  not change, with no inline thread and no vote tag, so under a green headline it is the only place
+  the finding appears. N is added to `body_only`.
 - **Counts must agree.** A count in the headline ("Three unresolved ...") that disagrees with
   `Findings: N` or `Open (N)` prints a warning that the format may have moved, and is triage-required.
+  A sentence with a negator or resolution word ("All three issues were resolved.") takes no part in
+  the cross-check.
 
 A headline finding has no thread to reply on, and a description that honestly lists deferred
 trade-offs can hold the headline at "Needs a closer look" indefinitely. Disposition it the way a
