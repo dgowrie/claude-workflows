@@ -46,9 +46,10 @@ thread* may name the finding being answered - that is review-surface, not shippe
 Self-check before staging/committing, and before writing any outward PR or issue body -
 especially when a review loop preceded the commit, which is exactly when these labels are
 top of mind. Grep the staged diff (or PR/issue body) for `\bF[0-9]\b`, `\bC[0-9]\b`,
-`\bpiece [0-9]`, `\b[0-9][a-z]\b`, `PR [0-9]\b`, `adversarial`, `suppressed`, `refuter`,
-`bot-loop`. The last two patterns (`\b[0-9][a-z]\b`, `PR [0-9]\b`) throw false positives;
-a hit means reread the sentence, not refuse it. Catching it pre-commit is the whole point:
+`\bpiece [0-9]`, `\b[0-9]+[a-z]\b`, `PR [0-9]+\b`, `adversarial`, `suppressed`, `refuter`,
+`bot-loop`. The `[0-9]+` matters: `\b[0-9][a-z]\b` would catch `2a` but miss `10a`, and
+`PR [0-9]\b` would miss `PR 10`. The last two patterns (`\b[0-9]+[a-z]\b`, `PR [0-9]+\b`)
+throw false positives; a hit means reread the sentence, not refuse it. Catching it pre-commit is the whole point:
 a fix after review means an extra commit and a re-review.
 
 The same check applies when **briefing a sub-agent** that will write commits or a PR/issue
