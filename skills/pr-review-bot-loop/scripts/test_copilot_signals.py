@@ -154,6 +154,19 @@ OVERVIEW_CLEAN_WITH_RESOLVED = (
     "<summary><strong>Resolved since last review (1)</strong></summary>\n\n"
     "- moderate [Finding A](#discussion_r1) (2 votes)\n</details>\n"
 )
+# The same finding in both the "Review findings" list and a per-file cell. It is
+# one finding, so it must not read as two.
+OVERVIEW_FINDING_IN_LIST_AND_TABLE = (
+    OVERVIEW_MARKER + "### 🟡 Changes recommended\n\n"
+    "A moderate issue affects the handler.\n\n"
+    "**Findings:** None\n\n"
+    "<details>\n<summary><strong>What changed in this PR</strong></summary>\n\n"
+    "**Review findings:**\n"
+    "- **Moderate (2 votes):** the handler drops errors.\n\n"
+    "| File | Summary |\n|---|---|\n"
+    "| `src/a.ts` | Change. Moderate issue: the handler drops errors (2 votes). |\n"
+    "</details>\n"
+)
 OVERVIEW_UNKNOWN_HEADLINE = (
     OVERVIEW_MARKER + "### 🟣 Looks different today\n\nSomething.\n\n**Findings:** None\n"
 )
@@ -360,6 +373,31 @@ class ClassificationTests(unittest.TestCase):
         body = OVERVIEW_CLEAN.replace(
             "have no unresolved blocking issues.", "have no remaining blocking issues.")
         self.assertVerdict([review(HEAD, body=body)], signals.CLEAN)
+
+    def test_overview_negated_clean_prose_stays_clean(self):
+        """"No minor issues remain." holds three concern words and is the opposite
+        of a concern. Flagging it keeps a genuinely clean review dirty forever."""
+        for sentence in ("No minor issues remain.",
+                         "Nothing remains to address.",
+                         "There are no nits and nothing to consider.",
+                         "No blocking issues were found, and none remain."):
+            with self.subTest(sentence=sentence):
+                body = OVERVIEW_CLEAN.replace(
+                    "The changes are fully reviewed, tested, and have no unresolved "
+                    "blocking issues.", sentence)
+                self.assertVerdict([review(HEAD, body=body)], signals.CLEAN)
+
+    def test_overview_positive_leftover_after_a_negation_still_requires_triage(self):
+        """A negator only covers its own clause."""
+        for sentence in ("No blocking issues, but a nit remains.",
+                         "No blocking issues; consider renaming one test.",
+                         "No issues remain other than a minor naming nit.",
+                         "Not a blocker, only a minor nit remains."):
+            with self.subTest(sentence=sentence):
+                body = OVERVIEW_CLEAN.replace(
+                    "The changes are fully reviewed, tested, and have no unresolved "
+                    "blocking issues.", sentence)
+                self.assertVerdict([review(HEAD, body=body)], signals.TRIAGE_REQUIRED)
 
     def test_overview_marker_is_scoped_to_the_review_at_head(self):
         self.assertVerdict(
@@ -585,6 +623,16 @@ class OverviewParserTests(unittest.TestCase):
         overview = signals.parse_overview(OVERVIEW_TABLE_ONLY_FINDING, inline=0)
         self.assertEqual((overview.declared, overview.open_count, overview.body_only),
                          (2, 2, 1))
+
+    def test_one_finding_in_both_list_and_table_counts_once(self):
+        overview = signals.parse_overview(OVERVIEW_FINDING_IN_LIST_AND_TABLE, inline=0)
+        self.assertEqual(overview.body_only, 1)
+
+    def test_table_findings_beyond_the_list_still_count(self):
+        """The list is not assumed to be complete: the larger section wins."""
+        body = OVERVIEW_FINDING_IN_LIST_AND_TABLE.replace(
+            "(2 votes). |\n", "(2 votes). |\n| `src/b.ts` | Change. Issue: a retry has no cap (1 vote). |\n")
+        self.assertEqual(signals.parse_overview(body, inline=0).body_only, 2)
 
     def test_inline_threads_account_for_body_findings(self):
         """Inline comments are already triage-required; they also stop the same

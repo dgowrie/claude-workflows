@@ -166,7 +166,18 @@ VERDICT_HEADING = re.compile(r"^###[ \t]+(?P<heading>.+?)[ \t]*$", re.MULTILINE)
 # A sentence under a clean verdict that still names something outstanding. Tight
 # on purpose: "remaining" is common in clean prose ("no remaining issues"), so only
 # "remain(s)" counts, and the list is a heuristic that fails toward triage.
+#
+# A concern word is cancelled by a negator in its own clause: "No minor issues
+# remain." holds three of them and is the opposite of a concern, and flagging it
+# keeps a genuinely clean review dirty forever. Clauses split on punctuation and on
+# the words that turn a sentence back to a positive ("but", "only", "other than"),
+# so "No blocking issues, but a nit remains." still names something outstanding.
 CONCERN_PROSE = re.compile(r"\bnits?\b|\bminor\b|\bremains?\b|\bconsider\b", re.IGNORECASE)
+NEGATOR = re.compile(r"\b(?:no|not|none|nothing|without|never|neither|nor)\b|n't", re.IGNORECASE)
+CLAUSE_BREAK = re.compile(
+    r"[;:,.]|\b(?:but|however|except|only|though|although|other\s+than|apart\s+from)\b",
+    re.IGNORECASE,
+)
 DECLARED_FINDINGS = re.compile(r"\*\*Findings:\*\*[ \t]*(?:(?P<count>\d+)|(?P<none>none))", re.IGNORECASE)
 OPEN_COUNT = re.compile(r"\bOpen\s*\((\d+)\)", re.IGNORECASE)
 RESOLVED_LABEL = re.compile(r"\bResolved\b", re.IGNORECASE)
@@ -184,11 +195,13 @@ HEADLINE_COUNT = re.compile(
 class Overview:
     """What an overview-layout body says outside inline comments and suppressed blocks.
 
-    `body_only` is a lower bound. Inline comments and `Open (N)` both account for
-    some findings, but one finding can become several inline comments, so the
-    subtraction can hide a body-only finding while inline comments exist. That is
-    harmless to the verdict, which already requires triage on any inline comment,
-    and it is exact in the case this exists for: zero inline comments.
+    `body_only` is approximate in both directions. Inline comments and `Open (N)`
+    account for some findings, but one finding can become several inline comments,
+    so the subtraction can hide a body-only finding while inline comments exist;
+    and a finding repeated within one section can be counted more than once. The
+    verdict depends only on whether it is non-zero, and inline comments already
+    require triage, so the case it exists for, zero inline comments, is the one
+    where it is tightest.
     """
 
     def __init__(self, verdict, sentence, declared, open_count, body_only, reasons, warnings):
@@ -199,6 +212,14 @@ class Overview:
         self.body_only = body_only
         self.reasons = reasons
         self.warnings = warnings
+
+
+def names_outstanding(sentence):
+    """True when some clause of `sentence` has a concern word and no negator."""
+    return any(
+        CONCERN_PROSE.search(clause) and not NEGATOR.search(clause)
+        for clause in CLAUSE_BREAK.split(sentence)
+    )
 
 
 def _strip_emoji_prefix(heading):
@@ -249,16 +270,26 @@ def parse_overview(body, inline):
             counted_blocks.append(block.group(0))
     countable = DETAILS_BLOCK.sub("", text) + "\n" + "\n".join(counted_blocks)
 
+    # The list and the per-file table can restate the same finding, so summing
+    # them, or counting every vote tag in the body, counts it twice. Count each
+    # section on its own and take the larger: a lower bound on distinct findings
+    # that never double-counts across sections and does not assume the list is
+    # complete. A finding repeated within the table can still overcount; the
+    # verdict depends only on whether the number is non-zero.
     list_match = REVIEW_FINDINGS_LIST.search(countable)
-    list_items = len(re.findall(r"^[ \t]*[-*][ \t]+", list_match.group("items"), re.MULTILINE)) if list_match else 0
-    body_findings = max(list_items, len(VOTE_TAG.findall(countable)))
+    if list_match:
+        list_items = len(re.findall(r"^[ \t]*[-*][ \t]+", list_match.group("items"), re.MULTILINE))
+        outside_list = countable[:list_match.start()] + countable[list_match.end():]
+    else:
+        list_items, outside_list = 0, countable
+    body_findings = max(list_items, len(VOTE_TAG.findall(outside_list)))
     body_only = max(0, body_findings - max(open_count or 0, inline))
 
     if verdict is None:
         reasons.append("an overview body with no parsable headline")
     elif verdict.casefold().rstrip(".!") not in CLEAN_VERDICTS:
         reasons.append(f'headline verdict "{verdict}" is not a known-clean verdict')
-    elif CONCERN_PROSE.search(sentence):
+    elif names_outstanding(sentence):
         reasons.append("the headline sentence names something outstanding")
     if declared:
         reasons.append(f"declares {declared} finding{'s' if declared != 1 else ''}")

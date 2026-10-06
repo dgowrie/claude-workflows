@@ -212,11 +212,16 @@ detector learned them. It prints them as `body_only=N` and `headline="<verdict>:
 - **A green verdict can still carry a finding.** "No blocking issues were identified; only a minor
   test naming nit remains." sat under `Approval recommended`. The sentence is scanned for `nit`,
   `minor`, `remain(s)`, and `consider`; a hit is triage-required, read as "read the body", not clean.
+  A concern word is cancelled by a negator in its own clause ("No minor issues remain." is clean),
+  and clauses break on punctuation and on "but", "only", and "other than", so "No blocking issues,
+  but a nit remains." is not.
 - **Vote tags count.** A `**Review findings:**` bullet list and `(N vote(s))` mentions in the
-  per-file table are findings with no thread. They are counted against `Open (N)` and the inline
-  comments; the surplus is `body_only`. `Resolved since last review` blocks are excluded, since
-  those were triaged in an earlier round. The count is a lower bound while inline comments exist
-  (one finding can become several), and exact at zero inline, the case that matters.
+  per-file table are findings with no thread. The list and the table can restate the same finding,
+  so each is counted on its own and the larger wins, then compared against `Open (N)` and the
+  inline comments; the surplus is `body_only`. `Resolved since last review` blocks are excluded,
+  since those were triaged in an earlier round. The number is approximate (one finding can become
+  several inline comments, and one repeated within the table can overcount); the verdict depends
+  only on whether it is non-zero.
 - **Counts must agree.** A count in the headline ("Three unresolved ...") that disagrees with
   `Findings: N` or `Open (N)` prints a warning that the format may have moved, and is triage-required.
 
