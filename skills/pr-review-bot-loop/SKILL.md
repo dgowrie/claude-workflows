@@ -216,10 +216,11 @@ detector learned them. It prints them as `body_only=N` and `headline="<verdict>:
   `is resolved`) in its own clause ("No minor issues remain." and "The minor nit was fixed." are
   clean). A negated or pending resolution ("was not fixed", "still needs to be fixed", "should be
   addressed") is outstanding whatever else the clause holds, unless a negator comes first ("Nothing
-  needs to be addressed." is clean),
-  and clauses break on punctuation, sentence dashes (a spaced hyphen or a Unicode dash, not
-  "well-scoped"), and "but", "only", and "other than", so "No blocking issues,
-  but a nit remains." is not. Across "and" / "or", negation carries into a segment unless it opens
+  needs to be addressed." is clean). Clauses break on punctuation, sentence dashes (a spaced hyphen
+  or a Unicode dash, not "well-scoped"), "but", "only", "other than", and subordinators ("after",
+  "once", "because", "if"). So "No blocking issues, but a nit remains." is not clean, and neither is
+  "A minor nit remains after the handler was fixed.", since the resolution belongs to the other
+  clause. Across "and" / "or", negation carries into a segment unless it opens
   with a determiner, number, or pronoun (its own subject), so "No minor or blocking issues remain."
   is clean and "No blocking issues were identified and a minor nit remains." is not. A leftover with
   no determiner ("and minor nit remains") is the known miss.

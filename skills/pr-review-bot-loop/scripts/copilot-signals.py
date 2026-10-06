@@ -206,7 +206,10 @@ PENDING_RESOLUTION = re.compile(
 SENTENCE_DASHES = "".join(chr(code) for code in (8211, 8212, 8213))
 CLAUSE_BREAK = re.compile(
     r"[;:,.]|[" + SENTENCE_DASHES + r"]|\s-{1,2}\s"
-    r"|\b(?:but|however|except|only|though|although|other\s+than|apart\s+from)\b",
+    r"|\b(?:but|however|except|only|though|although|other\s+than|apart\s+from"
+    # Subordinators: a resolution in the "after ..." clause resolves that clause's
+    # subject, not the main clause's. "as" is left out, since "such as" would split.
+    r"|after|once|when|whenever|because|since|while|whereas|if)\b",
     re.IGNORECASE,
 )
 COORDINATOR = re.compile(r"\b(?:and|or)\b", re.IGNORECASE)

@@ -493,6 +493,30 @@ class ClassificationTests(unittest.TestCase):
             "No blocking issues, and the follow-up work is well-scoped.")
         self.assertVerdict([review(HEAD, body=body)], signals.CLEAN)
 
+    def test_overview_unrelated_resolution_in_a_subordinate_clause_does_not_hide_a_leftover(self):
+        """"was fixed" resolves the handler, not the nit. Subordinators separate
+        the clauses so the resolution cannot cancel a concern it does not name."""
+        for sentence in ("A minor nit remains after the handler was fixed.",
+                         "A minor nit remains once the handler was addressed.",
+                         "The handler was fixed because a nit remains elsewhere."):
+            with self.subTest(sentence=sentence):
+                body = OVERVIEW_CLEAN.replace(
+                    "The changes are fully reviewed, tested, and have no unresolved "
+                    "blocking issues.", sentence)
+                self.assertVerdict([review(HEAD, body=body)], signals.TRIAGE_REQUIRED)
+
+    def test_overview_subordinate_clause_does_not_hide_a_headline_count(self):
+        body = OVERVIEW_CLEAN.replace(
+            "The changes are fully reviewed, tested, and have no unresolved blocking issues.",
+            "Three blocking issues were found after the handler was fixed.")
+        self.assertVerdict([review(HEAD, body=body)], signals.TRIAGE_REQUIRED)
+
+    def test_overview_negated_clause_before_a_subordinate_one_stays_clean(self):
+        body = OVERVIEW_CLEAN.replace(
+            "The changes are fully reviewed, tested, and have no unresolved blocking issues.",
+            "Nothing remains after the handler was fixed.")
+        self.assertVerdict([review(HEAD, body=body)], signals.CLEAN)
+
     def test_overview_previously_missed_block_requires_triage(self):
         """Under a clean headline: the block is the only place the finding appears."""
         body = OVERVIEW_CLEAN + PREVIOUSLY_MISSED_BLOCK.format(count=1)
