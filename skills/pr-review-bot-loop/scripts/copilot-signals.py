@@ -25,7 +25,8 @@ A `ccr-overview-vN` body can carry a finding in neither place: in the headline
 verdict or its sentence, in a "Review findings" list, or in a vote-tagged mention
 in the per-file table. Those fold into exit 1 too and print as `body_only=N` and
 `headline="..."`. Only the known-clean verdict, with nothing else in the body,
-stays clean; an unknown verdict or an unreadable layout is triage-required.
+stays clean; an unknown verdict, an unreadable layout, or a marker version other
+than the verified one is triage-required.
 
 Known bound: the query reads the newest 50 reviews. Each thread reply posted over
 REST adds an author-authored review artifact, so a PR that accumulated more than
@@ -160,7 +161,8 @@ def parse_suppressed(body):
 # allow-list, with nothing else in the body, is clean. The allow-list holds the one
 # verdict observed on a genuinely clean review; any other text is triage-required
 # until a second clean sample is captured.
-OVERVIEW_MARKER = re.compile(r"<!--\s*ccr-overview-v\d+\s*-->")
+OVERVIEW_MARKER = re.compile(r"<!--\s*ccr-overview-(?P<version>v\d+)\s*-->")
+VERIFIED_OVERVIEW_VERSION = "v2"
 CLEAN_VERDICTS = {"approval recommended"}
 VERDICT_HEADING = re.compile(r"^###[ \t]+(?P<heading>.+?)[ \t]*$", re.MULTILINE)
 # A sentence under a clean verdict that still names something outstanding. Tight
@@ -172,10 +174,25 @@ VERDICT_HEADING = re.compile(r"^###[ \t]+(?P<heading>.+?)[ \t]*$", re.MULTILINE)
 # keeps a genuinely clean review dirty forever. Clauses split on punctuation and on
 # the words that turn a sentence back to a positive ("but", "only", "other than"),
 # so "No blocking issues, but a nit remains." still names something outstanding.
+#
+# "and" / "or" are the hard case. Negation is shared across them in "No minor or
+# blocking issues remain." and not in "No blocking issues were identified and a
+# minor nit remains.", and the second is the fail-open direction. A coordinated
+# segment starts a new clause when it opens with a determiner, quantifier, number
+# or pronoun (it has its own subject, so it needs its own negator); any other
+# opening continues the previous clause and inherits its negation. A leftover
+# phrased without a determiner ("and minor nit remains") is the miss this leaves.
 CONCERN_PROSE = re.compile(r"\bnits?\b|\bminor\b|\bremains?\b|\bconsider\b", re.IGNORECASE)
 NEGATOR = re.compile(r"\b(?:no|not|none|nothing|without|never|neither|nor)\b|n't", re.IGNORECASE)
 CLAUSE_BREAK = re.compile(
     r"[;:,.]|\b(?:but|however|except|only|though|although|other\s+than|apart\s+from)\b",
+    re.IGNORECASE,
+)
+COORDINATOR = re.compile(r"\b(?:and|or)\b", re.IGNORECASE)
+NEW_CLAUSE_OPENING = re.compile(
+    r"\s*(?:an?|the|this|that|these|those|some|several|few|many|another|other|any|each|every"
+    r"|one|two|three|four|five|six|seven|eight|nine|ten|\d+"
+    r"|it|its|there|we|they|i|you|he|she)\b",
     re.IGNORECASE,
 )
 DECLARED_FINDINGS = re.compile(r"\*\*Findings:\*\*[ \t]*(?:(?P<count>\d+)|(?P<none>none))", re.IGNORECASE)
@@ -216,10 +233,15 @@ class Overview:
 
 def names_outstanding(sentence):
     """True when some clause of `sentence` has a concern word and no negator."""
-    return any(
-        CONCERN_PROSE.search(clause) and not NEGATOR.search(clause)
-        for clause in CLAUSE_BREAK.split(sentence)
-    )
+    for segment in CLAUSE_BREAK.split(sentence):
+        negated = False
+        for position, part in enumerate(COORDINATOR.split(segment)):
+            if position == 0 or NEW_CLAUSE_OPENING.match(part):
+                negated = False
+            negated = negated or bool(NEGATOR.search(part))
+            if CONCERN_PROSE.search(part) and not negated:
+                return True
+    return False
 
 
 def _strip_emoji_prefix(heading):
@@ -285,6 +307,11 @@ def parse_overview(body, inline):
     body_findings = max(list_items, len(VOTE_TAG.findall(outside_list)))
     body_only = max(0, body_findings - max(open_count or 0, inline))
 
+    # Parsed best-effort, never trusted: a later version can move findings
+    # somewhere this parser does not read, so its headline cannot clear a review.
+    if marker.group("version") != VERIFIED_OVERVIEW_VERSION:
+        reasons.append(f"overview layout {marker.group('version')} is not the verified "
+                       f"{VERIFIED_OVERVIEW_VERSION}")
     if verdict is None:
         reasons.append("an overview body with no parsable headline")
     elif verdict.casefold().rstrip(".!") not in CLEAN_VERDICTS:

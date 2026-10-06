@@ -214,7 +214,14 @@ detector learned them. It prints them as `body_only=N` and `headline="<verdict>:
   `minor`, `remain(s)`, and `consider`; a hit is triage-required, read as "read the body", not clean.
   A concern word is cancelled by a negator in its own clause ("No minor issues remain." is clean),
   and clauses break on punctuation and on "but", "only", and "other than", so "No blocking issues,
-  but a nit remains." is not.
+  but a nit remains." is not. Across "and" / "or", negation carries into a segment unless it opens
+  with a determiner, number, or pronoun (its own subject), so "No minor or blocking issues remain."
+  is clean and "No blocking issues were identified and a minor nit remains." is not. A leftover with
+  no determiner ("and minor nit remains") is the known miss.
+- **Only v2 is verified.** A `ccr-overview-vN` marker other than v2 is still parsed, but its
+  headline can never clear the review: a later layout can move findings somewhere the parser does
+  not read. Expect the loop to stay at exit `1` with a "layout vN" reason until the parser is
+  checked against that version.
 - **Vote tags count.** A `**Review findings:**` bullet list and `(N vote(s))` mentions in the
   per-file table are findings with no thread. The list and the table can restate the same finding,
   so each is counted on its own and the larger wins, then compared against `Open (N)` and the

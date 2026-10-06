@@ -380,7 +380,10 @@ class ClassificationTests(unittest.TestCase):
         for sentence in ("No minor issues remain.",
                          "Nothing remains to address.",
                          "There are no nits and nothing to consider.",
-                         "No blocking issues were found, and none remain."):
+                         "No blocking issues were found, and none remain.",
+                         "No minor or blocking issues remain.",
+                         "There are no nits or minor issues.",
+                         "No nits and nothing to consider."):
             with self.subTest(sentence=sentence):
                 body = OVERVIEW_CLEAN.replace(
                     "The changes are fully reviewed, tested, and have no unresolved "
@@ -392,7 +395,10 @@ class ClassificationTests(unittest.TestCase):
         for sentence in ("No blocking issues, but a nit remains.",
                          "No blocking issues; consider renaming one test.",
                          "No issues remain other than a minor naming nit.",
-                         "Not a blocker, only a minor nit remains."):
+                         "Not a blocker, only a minor nit remains.",
+                         "No blocking issues were identified and a minor naming nit remains.",
+                         "No blocking issues and one minor nit remains.",
+                         "Nothing blocks this or the minor nit remains."):
             with self.subTest(sentence=sentence):
                 body = OVERVIEW_CLEAN.replace(
                     "The changes are fully reviewed, tested, and have no unresolved "
@@ -652,9 +658,17 @@ class OverviewParserTests(unittest.TestCase):
                 overview = signals.parse_overview(body, inline=0)
                 self.assertTrue(any("headline says 3" in reason for reason in overview.reasons))
 
-    def test_a_future_marker_version_is_still_parsed(self):
-        body = OVERVIEW_HEADLINE_CONCERN.replace("ccr-overview-v2", "ccr-overview-v3")
-        self.assertIsNotNone(signals.parse_overview(body, inline=0))
+    def test_a_future_marker_version_is_parsed_but_never_clean(self):
+        """The layout is verified for v2 only. A later version can move findings
+        somewhere this parser does not read, so a clean-looking v3 body is not
+        evidence of anything."""
+        body = OVERVIEW_CLEAN.replace("ccr-overview-v2", "ccr-overview-v3")
+        overview = signals.parse_overview(body, inline=0)
+        self.assertIsNotNone(overview)
+        self.assertTrue(any("v3" in reason for reason in overview.reasons))
+
+    def test_the_verified_marker_version_adds_no_reason(self):
+        self.assertEqual(signals.parse_overview(OVERVIEW_CLEAN, inline=0).reasons, [])
 
 
 class ArgumentTests(unittest.TestCase):
