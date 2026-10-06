@@ -461,6 +461,20 @@ class ClassificationTests(unittest.TestCase):
                     "blocking issues.", sentence)
                 self.assertVerdict([review(HEAD, body=body)], signals.CLEAN)
 
+    def test_overview_clean_clause_does_not_hide_a_count_in_another_clause(self):
+        """The cross-check exclusion is scoped to the clause holding the count, so
+        "no nits remain" cannot hide "three blocking issues were found"."""
+        body = OVERVIEW_CLEAN.replace(
+            "The changes are fully reviewed, tested, and have no unresolved blocking issues.",
+            "Three blocking issues were found, but no nits remain.")
+        self.assertVerdict([review(HEAD, body=body)], signals.TRIAGE_REQUIRED)
+
+    def test_overview_resolved_count_beside_a_clean_clause_stays_clean(self):
+        body = OVERVIEW_CLEAN.replace(
+            "The changes are fully reviewed, tested, and have no unresolved blocking issues.",
+            "All three issues were resolved, and no nits remain.")
+        self.assertVerdict([review(HEAD, body=body)], signals.CLEAN)
+
     def test_overview_previously_missed_block_requires_triage(self):
         """Under a clean headline: the block is the only place the finding appears."""
         body = OVERVIEW_CLEAN + PREVIOUSLY_MISSED_BLOCK.format(count=1)
