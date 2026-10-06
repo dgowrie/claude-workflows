@@ -219,7 +219,10 @@ NEW_CLAUSE_OPENING = re.compile(
     r"|it|its|there|we|they|i|you|he|she)\b",
     re.IGNORECASE,
 )
-DECLARED_FINDINGS = re.compile(r"\*\*Findings:\*\*[ \t]*(?:(?P<count>\d+)|(?P<none>none))", re.IGNORECASE)
+# The value is token-delimited: without the trailing \b a prefix of a malformed value
+# ("NoneAvailable", "0unknown") parses as a clean declaration.
+DECLARED_FINDINGS = re.compile(
+    r"\*\*Findings:\*\*[ \t]*(?:(?P<count>\d+)|(?P<none>none))\b", re.IGNORECASE)
 OPEN_COUNT = re.compile(r"\bOpen\s*\((\d+)\)", re.IGNORECASE)
 # A standalone block of findings in code the review says did not change. It has no
 # inline thread and no vote tag, so under a green headline it is the only place the

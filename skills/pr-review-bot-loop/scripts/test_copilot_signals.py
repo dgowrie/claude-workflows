@@ -538,7 +538,9 @@ class ClassificationTests(unittest.TestCase):
     def test_overview_unparsable_or_missing_findings_declaration_fails_closed(self):
         """An unreadable declaration is not "no findings". Read as absent it
         yields the same value as a clean review, which is the silent zero."""
-        for replacement in ("**Findings:** Unknown", "**Findings:**", "Findings: None", ""):
+        for replacement in ("**Findings:** Unknown", "**Findings:**", "Findings: None", "",
+                            "**Findings:** NoneAvailable", "**Findings:** 0unknown",
+                            "**Findings:** None2"):
             with self.subTest(replacement=replacement):
                 body = OVERVIEW_CLEAN.replace("**Findings:** None", replacement)
                 self.assertVerdict([review(HEAD, body=body)], signals.TRIAGE_REQUIRED)
