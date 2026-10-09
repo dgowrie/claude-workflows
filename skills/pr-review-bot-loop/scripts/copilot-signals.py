@@ -167,6 +167,13 @@ OVERVIEW_MARKER = re.compile(r"<!--\s*ccr-overview-(?P<version>v\d+)\s*-->")
 VERIFIED_OVERVIEW_VERSION = "v2"
 CLEAN_VERDICTS = {"approval recommended"}
 VERDICT_HEADING = re.compile(r"^###[ \t]+(?P<heading>.+?)[ \t]*$", re.MULTILINE)
+# The metadata rows under the heading, skipped when locating the sentence. Matched
+# tightly so that only these recognised labels are skipped; an unrecognised row is
+# treated as prose and fails closed. "Findings" is here too, so a body that is just
+# the verdict and these rows has no sentence and is clean on the verdict alone.
+METADATA_LINE = re.compile(
+    r"\*\*(?:Review effort(?:\s+level)?|Findings|Comments\s+generated|Files\s+reviewed):\*\*",
+    re.IGNORECASE)
 # The headline sentence can carry a finding that appears nowhere else: a green
 # "Approval recommended" verdict with `Findings: None` and no blocks has still read
 # "only a minor test naming nit remains." So the sentence is load-bearing and cannot
@@ -255,11 +262,19 @@ def parse_overview(body, inline):
     verdict, sentence = None, ""
     if heading:
         verdict = _strip_emoji_prefix(heading.group("heading"))
-        # The sentence is the first paragraph after the heading, unless that
-        # paragraph is already the bold metadata rows ("**Review effort:** ...").
+        # The sentence is the first paragraph after the heading that is not the
+        # metadata block. Only the known metadata labels are skipped: a paragraph
+        # whose every line is a recognised `**Label:**` row is metadata, so an empty
+        # sentence stays empty. Anything else, including bold or markup-wrapped prose
+        # ("**A boundary case remains.**"), is the sentence and must reach the
+        # allow-list rather than being skipped as formatting and read as clean.
         paragraphs = [p.strip() for p in re.split(r"\n\s*\n", top_level[heading.end():]) if p.strip()]
-        if paragraphs and not paragraphs[0].startswith(("**", "<")):
-            sentence = " ".join(paragraphs[0].split())
+        for paragraph in paragraphs:
+            lines = [line.strip() for line in paragraph.splitlines() if line.strip()]
+            if lines and all(METADATA_LINE.match(line) for line in lines):
+                continue
+            sentence = " ".join(paragraph.split())
+            break
 
     declared_match = DECLARED_FINDINGS.search(top_level)
     declared = None

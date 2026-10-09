@@ -423,6 +423,18 @@ class ClassificationTests(unittest.TestCase):
                     "blocking issues.", sentence)
                 self.assertVerdict([review(HEAD, body=body)], signals.TRIAGE_REQUIRED)
 
+    def test_overview_a_formatted_sentence_is_prose_not_skipped_metadata(self):
+        """Only the known metadata labels are skipped. A bold- or markup-wrapped
+        concern must read as a sentence and fail the allow-list, not vanish."""
+        for sentence in ("**A boundary case remains.**",
+                         "*A boundary case remains.*",
+                         "<strong>A boundary case remains.</strong>"):
+            with self.subTest(sentence=sentence):
+                body = OVERVIEW_CLEAN.replace(
+                    "The changes are fully reviewed, tested, and have no unresolved "
+                    "blocking issues.", sentence)
+                self.assertVerdict([review(HEAD, body=body)], signals.TRIAGE_REQUIRED)
+
     def test_overview_unparsable_or_missing_findings_declaration_fails_closed(self):
         """An unreadable declaration is not "no findings". Read as absent it
         yields the same value as a clean review, which is the silent zero."""
