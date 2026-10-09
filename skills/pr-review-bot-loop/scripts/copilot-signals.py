@@ -109,6 +109,51 @@ DETAILS_BLOCK = re.compile(
     r"<details[^>]*>\s*<summary[^>]*>(?P<summary>.*?)</summary>(?P<inner>.*?)</details>",
     re.DOTALL | re.IGNORECASE,
 )
+# A non-greedy DETAILS_BLOCK stops at the first nested </details>, so a block that
+# contains nested detail children is not matched as a unit: its later children are
+# iterated on their own. For the overview that leaks a resolved section's nested
+# findings into the count, so its ranges are walked with a depth counter instead,
+# keeping each top-level <details> whole.
+DETAILS_TAG = re.compile(r"<details\b|</details>", re.IGNORECASE)
+SUMMARY_TAG = re.compile(r"<summary[^>]*>(?P<summary>.*?)</summary>", re.DOTALL | re.IGNORECASE)
+
+
+def _top_level_detail_ranges(text):
+    """Yield (start, end) for each balanced top-level <details>...</details> span.
+
+    Nested children fall inside their parent's span, never their own, so an excluded
+    parent carries its whole subtree. An unbalanced tail (a parent whose close is
+    missing) yields nothing for that parent, which keeps its content in the countable
+    text and so fails toward triage rather than dropping findings.
+    """
+    depth, start = 0, None
+    for tag in DETAILS_TAG.finditer(text):
+        if tag.group().lower().startswith("<details"):
+            if depth == 0:
+                start = tag.start()
+            depth += 1
+        elif depth > 0:
+            depth -= 1
+            if depth == 0:
+                yield start, tag.end()
+
+
+def top_level_details(text):
+    """Yield (full_text, summary) for each top-level <details> block."""
+    for start, end in _top_level_detail_ranges(text):
+        block = text[start:end]
+        summary = SUMMARY_TAG.search(block)
+        yield block, (summary.group("summary") if summary else "")
+
+
+def strip_top_level_details(text):
+    """`text` with every top-level <details> span removed, children included."""
+    out, last = [], 0
+    for start, end in _top_level_detail_ranges(text):
+        out.append(text[last:start])
+        last = end
+    out.append(text[last:])
+    return "".join(out)
 # Inside the block each real finding is a bold file path ("**path/to/file.ext**"
 # or "**path/to/file.ext:line**"). Requiring a dotted extension separates the
 # findings from the block's own bold metadata rows ("**Files reviewed:**",
@@ -255,7 +300,7 @@ def parse_overview(body, inline):
     if not marker:
         return None
     text = body[marker.end():]
-    top_level = DETAILS_BLOCK.sub("", text)
+    top_level = strip_top_level_details(text)
     reasons = []
 
     heading = VERDICT_HEADING.search(top_level)
@@ -285,8 +330,9 @@ def parse_overview(body, inline):
     previously_missed = 0
     unreadable_counts = []
     counted_blocks = []
-    for block in DETAILS_BLOCK.finditer(text):
-        summary = block.group("summary")
+    # Each top-level block is read by its own <summary>, and a resolved one is dropped
+    # whole (nested children included) so none of its vote tags leaks into the count.
+    for block, summary in top_level_details(text):
         missed_match = PREVIOUSLY_MISSED.search(summary)
         if missed_match:
             previously_missed += int(missed_match.group(1))
@@ -300,8 +346,8 @@ def parse_overview(body, inline):
         # Resolved threads keep their vote tags. They were triaged in an earlier
         # round, so counting them keeps every clean round dirty forever.
         if not RESOLVED_LABEL.search(summary):
-            counted_blocks.append(block.group(0))
-    countable = DETAILS_BLOCK.sub("", text) + "\n" + "\n".join(counted_blocks)
+            counted_blocks.append(block)
+    countable = strip_top_level_details(text) + "\n" + "\n".join(counted_blocks)
 
     # The list and the per-file table can restate the same finding, so summing
     # them, or counting every vote tag in the body, counts it twice. Count each

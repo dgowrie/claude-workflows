@@ -175,6 +175,18 @@ PREVIOUSLY_MISSED_BLOCK = (
     "<details>\n<summary>Avoid counting resolved mentions as findings</summary>\n\n"
     "`src/a.py:208`\n\nThe helper treats every number as a count.\n</details>\n</details>\n"
 )
+# A resolved section with two nested finding details, each vote-tagged. The outer
+# summary says "resolved", so the whole section was triaged in an earlier round. A
+# non-greedy details match stops at the first nested `</details>`, iterates the second
+# nested finding on its own (its summary has no "resolved"), and leaks its vote tag
+# into body_only, so a clean review never terminates.
+OVERVIEW_CLEAN_NESTED_RESOLVED = (
+    OVERVIEW_CLEAN +
+    "\n<details>\n<summary><strong>2 resolved since last review</strong></summary>\n\n"
+    "<details>\n<summary>The handler drops errors (2 votes)</summary>\n\na\n</details>\n"
+    "<details>\n<summary>The retry has no cap (3 votes)</summary>\n\nb\n</details>\n"
+    "</details>\n"
+)
 OVERVIEW_UNKNOWN_HEADLINE = (
     OVERVIEW_MARKER + "### 🟣 Looks different today\n\nSomething.\n\n**Findings:** None\n"
 )
@@ -374,6 +386,12 @@ class ClassificationTests(unittest.TestCase):
 
     def test_overview_resolved_since_last_review_votes_do_not_keep_the_loop_dirty(self):
         self.assertVerdict([review(HEAD, body=OVERVIEW_CLEAN_WITH_RESOLVED)],
+                           signals.CLEAN)
+
+    def test_overview_nested_resolved_findings_do_not_leak_into_body_only(self):
+        """A resolved section with several nested findings is excluded as a whole;
+        no child's vote tag leaks past a non-greedy details match."""
+        self.assertVerdict([review(HEAD, body=OVERVIEW_CLEAN_NESTED_RESOLVED)],
                            signals.CLEAN)
 
     def test_overview_only_the_known_clean_sentence_is_clean(self):
@@ -713,6 +731,17 @@ class OverviewParserTests(unittest.TestCase):
         """Clean verdict, so the sentence check (an elif under it) actually runs."""
         overview = signals.parse_overview(OVERVIEW_CLEAN_VERDICT_WITH_NIT, inline=0)
         self.assertTrue(any("known-clean sentence" in reason for reason in overview.reasons))
+
+    def test_nested_resolved_section_contributes_no_body_only(self):
+        overview = signals.parse_overview(OVERVIEW_CLEAN_NESTED_RESOLVED, inline=0)
+        self.assertEqual(overview.body_only, 0)
+
+    def test_a_non_resolved_nested_section_still_counts_its_findings(self):
+        """The whole-range exclusion applies only to resolved sections: a kept
+        section's nested vote tags are still counted."""
+        body = OVERVIEW_CLEAN_NESTED_RESOLVED.replace(
+            "2 resolved since last review", "2 open findings")
+        self.assertEqual(signals.parse_overview(body, inline=0).body_only, 2)
 
     def test_a_future_marker_version_is_parsed_but_never_clean(self):
         """The layout is verified for v2 only. A later version can move findings
