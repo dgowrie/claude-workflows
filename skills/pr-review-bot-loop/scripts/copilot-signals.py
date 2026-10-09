@@ -212,12 +212,20 @@ OVERVIEW_MARKER = re.compile(r"<!--\s*ccr-overview-(?P<version>v\d+)\s*-->")
 VERIFIED_OVERVIEW_VERSION = "v2"
 CLEAN_VERDICTS = {"approval recommended"}
 VERDICT_HEADING = re.compile(r"^###[ \t]+(?P<heading>.+?)[ \t]*$", re.MULTILINE)
-# The metadata rows under the heading, skipped when locating the sentence. Matched
-# tightly so that only these recognised labels are skipped; an unrecognised row is
-# treated as prose and fails closed. "Findings" is here too, so a body that is just
-# the verdict and these rows has no sentence and is clean on the verdict alone.
+# The metadata rows under the heading, skipped (with fullmatch) when locating the
+# sentence. The whole line must be the label plus its own tight value, so prose
+# appended to a row ("**Review effort:** Lite - a concern remains.") is not matched
+# as a prefix and hidden; it stays prose and reaches the allow-list. A leading run of
+# non-word, non-`*` characters allows a badge emoji or "- " before the label. Values
+# are tight (a single effort token, a count or None, a number, an N/M ratio) so no
+# clause can ride along. An unrecognised row fails to match and fails closed.
 METADATA_LINE = re.compile(
-    r"\*\*(?:Review effort(?:\s+level)?|Findings|Comments\s+generated|Files\s+reviewed):\*\*",
+    r"[^\w*\n]*\*\*(?:"
+    r"Review\s+effort(?:\s+level)?:\*\*\s*\S+"
+    r"|Findings:\*\*\s*(?:\d+(?:\s+[A-Za-z]+)?|None)(?:\s*<[^>]*>)*"
+    r"|Comments\s+generated:\*\*\s*\d+"
+    r"|Files\s+reviewed:\*\*\s*\d+/\d+(?:\s+[A-Za-z]+)*"
+    r")\s*",
     re.IGNORECASE)
 # The headline sentence can carry a finding that appears nowhere else: a green
 # "Approval recommended" verdict with `Findings: None` and no blocks has still read
@@ -319,7 +327,7 @@ def parse_overview(body, inline):
         paragraphs = [p.strip() for p in re.split(r"\n\s*\n", top_level[heading.end():]) if p.strip()]
         for paragraph in paragraphs:
             lines = [line.strip() for line in paragraph.splitlines() if line.strip()]
-            if lines and all(METADATA_LINE.match(line) for line in lines):
+            if lines and all(METADATA_LINE.fullmatch(line) for line in lines):
                 continue
             prose.append(" ".join(paragraph.split()))
     sentence = " ".join(prose)

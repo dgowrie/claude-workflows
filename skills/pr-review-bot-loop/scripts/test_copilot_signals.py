@@ -441,6 +441,25 @@ class ClassificationTests(unittest.TestCase):
                     "blocking issues.", sentence)
                 self.assertVerdict([review(HEAD, body=body)], signals.TRIAGE_REQUIRED)
 
+    def test_overview_prose_appended_to_a_metadata_row_is_not_hidden(self):
+        """A metadata row is the label plus its own short value. A concern appended
+        to the row, with or without a trailing period, makes the line prose and must
+        reach the allow-list, not be skipped by a prefix match."""
+        for effort in ("Lite - a boundary case remains unhandled.",
+                       "Lite and a boundary case remains unhandled",
+                       "Lite. A boundary case remains unhandled."):
+            with self.subTest(effort=effort):
+                body = OVERVIEW_CLEAN.replace("**Review effort:** Lite",
+                                              f"**Review effort:** {effort}")
+                self.assertVerdict([review(HEAD, body=body)], signals.TRIAGE_REQUIRED)
+
+    def test_overview_emoji_prefixed_metadata_row_is_still_metadata(self):
+        """The real layout prefixes the effort row with a badge emoji; it must still
+        read as metadata so a verdict-plus-metadata body stays clean."""
+        body = (OVERVIEW_MARKER + "### 🟢 Approval recommended\n\n"
+                "🧠 **Review effort:** Balanced\n**Findings:** None\n")
+        self.assertVerdict([review(HEAD, body=body)], signals.CLEAN)
+
     def test_overview_a_second_prose_paragraph_is_not_ignored(self):
         """Every non-metadata paragraph must be allow-listed. The known-clean
         sentence cannot carry a concern in a paragraph after it."""
