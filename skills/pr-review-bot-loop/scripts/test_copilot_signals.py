@@ -376,164 +376,52 @@ class ClassificationTests(unittest.TestCase):
         self.assertVerdict([review(HEAD, body=OVERVIEW_CLEAN_WITH_RESOLVED)],
                            signals.CLEAN)
 
-    def test_overview_clean_headline_saying_no_remaining_issues_stays_clean(self):
-        """"remaining" is common clean prose; only "remain(s)" is a concern signal."""
-        body = OVERVIEW_CLEAN.replace(
-            "have no unresolved blocking issues.", "have no remaining blocking issues.")
+    def test_overview_only_the_known_clean_sentence_is_clean(self):
+        """The sentence is matched against an allow-list, not parsed. Case,
+        surrounding whitespace, and trailing punctuation are normalised away."""
+        for sentence in (
+            "The changes are fully reviewed, tested, and have no unresolved blocking issues.",
+            "the changes are fully reviewed, tested, and have no unresolved blocking issues",
+            "  The changes are fully reviewed, tested, and have no unresolved blocking issues!  ",
+        ):
+            with self.subTest(sentence=sentence):
+                body = OVERVIEW_CLEAN.replace(
+                    "The changes are fully reviewed, tested, and have no unresolved "
+                    "blocking issues.", sentence)
+                self.assertVerdict([review(HEAD, body=body)], signals.CLEAN)
+
+    def test_overview_clean_verdict_with_no_sentence_is_clean(self):
+        """Verdict plus metadata, no prose paragraph: no claim to misread, and the
+        structural counts still run."""
+        body = (OVERVIEW_MARKER + "### 🟢 Approval recommended\n\n"
+                "**Review effort:** Lite\n**Findings:** None\n")
         self.assertVerdict([review(HEAD, body=body)], signals.CLEAN)
 
-    def test_overview_negated_clean_prose_stays_clean(self):
-        """"No minor issues remain." holds three concern words and is the opposite
-        of a concern. Flagging it keeps a genuinely clean review dirty forever."""
+    def test_overview_a_novel_sentence_fails_closed(self):
+        """A sentence off the allow-list triages even when it reads clean to a
+        human. That false-closed is the accepted cost: one human read, never a
+        missed finding. These all read clean and all triage."""
         for sentence in ("No minor issues remain.",
-                         "Nothing remains to address.",
-                         "There are no nits and nothing to consider.",
-                         "No blocking issues were found, and none remain.",
-                         "No minor or blocking issues remain.",
-                         "There are no nits or minor issues.",
-                         "No nits and nothing to consider."):
-            with self.subTest(sentence=sentence):
-                body = OVERVIEW_CLEAN.replace(
-                    "The changes are fully reviewed, tested, and have no unresolved "
-                    "blocking issues.", sentence)
-                self.assertVerdict([review(HEAD, body=body)], signals.CLEAN)
-
-    def test_overview_positive_leftover_after_a_negation_still_requires_triage(self):
-        """A negator only covers its own clause."""
-        for sentence in ("No blocking issues, but a nit remains.",
-                         "No blocking issues; consider renaming one test.",
-                         "No issues remain other than a minor naming nit.",
-                         "Not a blocker, only a minor nit remains.",
-                         "No blocking issues were identified and a minor naming nit remains.",
-                         "No blocking issues and one minor nit remains.",
-                         "Nothing blocks this or the minor nit remains."):
+                         "All three issues were resolved.",
+                         "LGTM.",
+                         "The changes look good and are well tested."):
             with self.subTest(sentence=sentence):
                 body = OVERVIEW_CLEAN.replace(
                     "The changes are fully reviewed, tested, and have no unresolved "
                     "blocking issues.", sentence)
                 self.assertVerdict([review(HEAD, body=body)], signals.TRIAGE_REQUIRED)
 
-    def test_overview_resolved_or_negated_statements_stay_clean(self):
-        """A count word beside "resolved" or "no" is not a count of outstanding
-        findings, and a nit that "was fixed" is not outstanding."""
-        for sentence in ("All three issues were resolved.",
-                         "No one found any issues.",
-                         "The minor nit was fixed.",
-                         "Two nits were addressed in the last round."):
-            with self.subTest(sentence=sentence):
-                body = OVERVIEW_CLEAN.replace(
-                    "The changes are fully reviewed, tested, and have no unresolved "
-                    "blocking issues.", sentence)
-                self.assertVerdict([review(HEAD, body=body)], signals.CLEAN)
-
-    def test_overview_a_fixed_item_does_not_hide_one_that_remains(self):
-        for sentence in ("Two nits were fixed and one remains.",
-                         "The nit was fixed, but another minor issue remains."):
+    def test_overview_a_sentence_naming_a_leftover_requires_triage(self):
+        """The load-bearing case: a green verdict with `Findings: None` whose only
+        finding is in the sentence. Off the allow-list, so it triages."""
+        for sentence in ("Only a minor naming nit remains.",
+                         "No blocking issues, but a nit remains.",
+                         "The minor nit was not fixed."):
             with self.subTest(sentence=sentence):
                 body = OVERVIEW_CLEAN.replace(
                     "The changes are fully reviewed, tested, and have no unresolved "
                     "blocking issues.", sentence)
                 self.assertVerdict([review(HEAD, body=body)], signals.TRIAGE_REQUIRED)
-
-    def test_overview_negated_or_pending_resolution_requires_triage(self):
-        """A resolution word cancels a concern only when the item was resolved.
-        "not fixed", "still needs to be fixed" and "should be addressed" are the
-        opposite, and reading them as clean ends the loop on a stated leftover."""
-        for sentence in ("The minor nit was not fixed.",
-                         "The nit wasn't addressed.",
-                         "The minor nit still needs to be fixed.",
-                         "The nit has not been resolved.",
-                         "The issue should be addressed before merge.",
-                         "Not all issues were fixed.",
-                         "No blocking issues, and the nit was never resolved."):
-            with self.subTest(sentence=sentence):
-                body = OVERVIEW_CLEAN.replace(
-                    "The changes are fully reviewed, tested, and have no unresolved "
-                    "blocking issues.", sentence)
-                self.assertVerdict([review(HEAD, body=body)], signals.TRIAGE_REQUIRED)
-
-    def test_overview_negated_need_to_resolve_stays_clean(self):
-        for sentence in ("Nothing needs to be addressed.",
-                         "No nits remain; nothing should be fixed."):
-            with self.subTest(sentence=sentence):
-                body = OVERVIEW_CLEAN.replace(
-                    "The changes are fully reviewed, tested, and have no unresolved "
-                    "blocking issues.", sentence)
-                self.assertVerdict([review(HEAD, body=body)], signals.CLEAN)
-
-    def test_overview_clean_clause_does_not_hide_a_count_in_another_clause(self):
-        """The cross-check exclusion is scoped to the clause holding the count, so
-        "no nits remain" cannot hide "three blocking issues were found"."""
-        body = OVERVIEW_CLEAN.replace(
-            "The changes are fully reviewed, tested, and have no unresolved blocking issues.",
-            "Three blocking issues were found, but no nits remain.")
-        self.assertVerdict([review(HEAD, body=body)], signals.TRIAGE_REQUIRED)
-
-    def test_overview_resolved_count_beside_a_clean_clause_stays_clean(self):
-        body = OVERVIEW_CLEAN.replace(
-            "The changes are fully reviewed, tested, and have no unresolved blocking issues.",
-            "All three issues were resolved, and no nits remain.")
-        self.assertVerdict([review(HEAD, body=body)], signals.CLEAN)
-
-    def test_overview_dash_separated_leftover_requires_triage(self):
-        """A sentence dash joins a negated clause to a positive one the same way
-        "but" does. The Unicode dashes are built from code points on purpose."""
-        en_dash, em_dash = chr(8211), chr(8212)
-        for dash in (" - ", " -- ", f" {en_dash} ", f" {em_dash} ", em_dash):
-            with self.subTest(dash=dash):
-                body = OVERVIEW_CLEAN.replace(
-                    "The changes are fully reviewed, tested, and have no unresolved "
-                    "blocking issues.",
-                    f"No blocking issues were identified{dash}a minor nit remains.")
-                self.assertVerdict([review(HEAD, body=body)], signals.TRIAGE_REQUIRED)
-
-    def test_overview_hyphenated_words_are_not_clause_breaks(self):
-        body = OVERVIEW_CLEAN.replace(
-            "The changes are fully reviewed, tested, and have no unresolved blocking issues.",
-            "No blocking issues, and the follow-up work is well-scoped.")
-        self.assertVerdict([review(HEAD, body=body)], signals.CLEAN)
-
-    def test_overview_unrelated_resolution_in_a_subordinate_clause_does_not_hide_a_leftover(self):
-        """"was fixed" resolves the handler, not the nit. Subordinators separate
-        the clauses so the resolution cannot cancel a concern it does not name."""
-        for sentence in ("A minor nit remains after the handler was fixed.",
-                         "A minor nit remains once the handler was addressed.",
-                         "The handler was fixed because a nit remains elsewhere."):
-            with self.subTest(sentence=sentence):
-                body = OVERVIEW_CLEAN.replace(
-                    "The changes are fully reviewed, tested, and have no unresolved "
-                    "blocking issues.", sentence)
-                self.assertVerdict([review(HEAD, body=body)], signals.TRIAGE_REQUIRED)
-
-    def test_overview_subordinate_clause_does_not_hide_a_headline_count(self):
-        body = OVERVIEW_CLEAN.replace(
-            "The changes are fully reviewed, tested, and have no unresolved blocking issues.",
-            "Three blocking issues were found after the handler was fixed.")
-        self.assertVerdict([review(HEAD, body=body)], signals.TRIAGE_REQUIRED)
-
-    def test_overview_negated_clause_before_a_subordinate_one_stays_clean(self):
-        body = OVERVIEW_CLEAN.replace(
-            "The changes are fully reviewed, tested, and have no unresolved blocking issues.",
-            "Nothing remains after the handler was fixed.")
-        self.assertVerdict([review(HEAD, body=body)], signals.CLEAN)
-
-    def test_overview_resolved_count_does_not_hide_a_later_coordinated_count(self):
-        """Each count is judged in its own coordinated part: a resolved count
-        ("Two issues were resolved") must not excuse "three concerns" after it."""
-        for sentence in ("Two issues were resolved and three concerns were identified.",
-                         "Two issues were resolved or three concerns were identified.",
-                         "No one issue blocks this and three concerns were identified."):
-            with self.subTest(sentence=sentence):
-                body = OVERVIEW_CLEAN.replace(
-                    "The changes are fully reviewed, tested, and have no unresolved "
-                    "blocking issues.", sentence)
-                self.assertVerdict([review(HEAD, body=body)], signals.TRIAGE_REQUIRED)
-
-    def test_overview_two_resolved_counts_stay_clean(self):
-        body = OVERVIEW_CLEAN.replace(
-            "The changes are fully reviewed, tested, and have no unresolved blocking issues.",
-            "Two issues were resolved and three concerns were addressed.")
-        self.assertVerdict([review(HEAD, body=body)], signals.CLEAN)
 
     def test_overview_unparsable_or_missing_findings_declaration_fails_closed(self):
         """An unreadable declaration is not "no findings". Read as absent it
@@ -649,11 +537,6 @@ class ReportTests(unittest.TestCase):
         out = self.report([review(HEAD, body=OVERVIEW_HEADLINE_CONCERN)])
         self.assertIn("TRIAGE REQUIRED", out)
         self.assertIn("Needs a closer look", out.splitlines()[-1])
-
-    def test_warns_when_headline_count_disagrees_with_declared_count(self):
-        out = self.report([review(HEAD, body=OVERVIEW_TABLE_ONLY_FINDING)])
-        self.assertIn("WARNING: headline says 3", out)
-        self.assertIn("format may have moved", out)
 
 
 class ErrorPathTests(unittest.TestCase):
@@ -814,17 +697,10 @@ class OverviewParserTests(unittest.TestCase):
         overview = signals.parse_overview(OVERVIEW_REVIEW_FINDINGS_LIST, inline=3)
         self.assertEqual(overview.body_only, 0)
 
-    def test_headline_count_disagreeing_with_declared_count_is_a_reason(self):
-        overview = signals.parse_overview(OVERVIEW_TABLE_ONLY_FINDING, inline=0)
-        self.assertTrue(any("headline says 3" in reason for reason in overview.reasons))
-
-    def test_spelled_out_and_numeric_headline_counts_both_parse(self):
-        for sentence in ("Three unresolved issues remain.", "3 unresolved issues remain."):
-            with self.subTest(sentence=sentence):
-                body = OVERVIEW_TABLE_ONLY_FINDING.replace(
-                    "Three unresolved moderate issues affect two areas.", sentence)
-                overview = signals.parse_overview(body, inline=0)
-                self.assertTrue(any("headline says 3" in reason for reason in overview.reasons))
+    def test_a_sentence_off_the_allow_list_is_a_reason(self):
+        """Clean verdict, so the sentence check (an elif under it) actually runs."""
+        overview = signals.parse_overview(OVERVIEW_CLEAN_VERDICT_WITH_NIT, inline=0)
+        self.assertTrue(any("known-clean sentence" in reason for reason in overview.reasons))
 
     def test_a_future_marker_version_is_parsed_but_never_clean(self):
         """The layout is verified for v2 only. A later version can move findings

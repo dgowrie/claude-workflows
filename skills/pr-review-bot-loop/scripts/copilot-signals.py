@@ -153,74 +153,39 @@ def parse_suppressed(body):
     return count, findings, labels, undeclared
 
 
-# The overview layout (`<!-- ccr-overview-v2 -->`) reports findings in three places
-# that are neither an inline comment nor a suppressed block: the headline verdict
-# and its sentence, a "Review findings" bullet list, and vote-tagged mentions in
-# the per-file table. Each was observed reading CLEAN with a real concern in it,
-# including under a green verdict, so the parse fails closed: only a verdict on the
-# allow-list, with nothing else in the body, is clean. The allow-list holds the one
-# verdict observed on a genuinely clean review; any other text is triage-required
-# until a second clean sample is captured.
+# The overview layout (`<!-- ccr-overview-v2 -->`) reports findings in places that are
+# neither an inline comment nor a suppressed block: the headline verdict and its
+# sentence, a "Review findings" bullet list, vote-tagged mentions in the per-file
+# table, and `Open`/`Previously missed` blocks. Each was observed reading CLEAN with a
+# real concern in it, including under a green verdict. So the parse fails closed on
+# every one of them: a verdict off the allow-list, a sentence off the allow-list, an
+# unknown layout version, an unreadable count, or any counted finding in the body is
+# triage-required. Only the known-clean verdict and sentence, with nothing else in the
+# body, is clean. Both allow-lists hold what a genuinely clean review was observed to
+# say; grow them as further clean samples are captured.
 OVERVIEW_MARKER = re.compile(r"<!--\s*ccr-overview-(?P<version>v\d+)\s*-->")
 VERIFIED_OVERVIEW_VERSION = "v2"
 CLEAN_VERDICTS = {"approval recommended"}
 VERDICT_HEADING = re.compile(r"^###[ \t]+(?P<heading>.+?)[ \t]*$", re.MULTILINE)
-# A sentence under a clean verdict that still names something outstanding. Tight
-# on purpose: "remaining" is common in clean prose ("no remaining issues"), so only
-# "remain(s)" counts, and the list is a heuristic that fails toward triage.
+# The headline sentence can carry a finding that appears nowhere else: a green
+# "Approval recommended" verdict with `Findings: None` and no blocks has still read
+# "only a minor test naming nit remains." So the sentence is load-bearing and cannot
+# be ignored. It also cannot be classified by rule: an earlier version scanned it for
+# concern words with negation, coordination, subordination and resolution handling,
+# and Copilot produced a new sentence shape that fooled it every round, several of
+# them regressions the previous round's fix introduced. Regex cannot do the reference
+# resolution this needs, and the failures were all fail-open (a real leftover reading
+# clean), which is the exact failure the loop exists to prevent.
 #
-# A concern word is cancelled by a negator in its own clause: "No minor issues
-# remain." holds three of them and is the opposite of a concern, and flagging it
-# keeps a genuinely clean review dirty forever. Clauses split on punctuation and on
-# the words that turn a sentence back to a positive ("but", "only", "other than"),
-# so "No blocking issues, but a nit remains." still names something outstanding.
-#
-# "and" / "or" are the hard case. Negation is shared across them in "No minor or
-# blocking issues remain." and not in "No blocking issues were identified and a
-# minor nit remains.", and the second is the fail-open direction. A coordinated
-# segment starts a new clause when it opens with a determiner, quantifier, number
-# or pronoun (it has its own subject, so it needs its own negator); any other
-# opening continues the previous clause and inherits its negation. A leftover
-# phrased without a determiner ("and minor nit remains") is the miss this leaves.
-CONCERN_PROSE = re.compile(r"\bnits?\b|\bminor\b|\bremains?\b|\bconsider\b", re.IGNORECASE)
-#
-# A completed resolution cancels a concern word the same way a negator does: "The
-# minor nit was fixed." names nothing outstanding. Only a COMPLETED one does, though.
-# "was not fixed", "still needs to be fixed" and "should be addressed" carry the same
-# resolution word and state the opposite, so they are checked first and are
-# outstanding whatever else the clause holds. "unresolved" matches none of these,
-# since \bresolved needs a word boundary before it.
-RESOLUTION = r"(?:resolved|fixed|addressed|handled|corrected)\b"
-NEGATOR = re.compile(r"\b(?:no|not|none|nothing|without|never|neither|nor)\b|n't", re.IGNORECASE)
-COMPLETED = re.compile(r"\b(?:was|were|been|is|are|now|already)\s+" + RESOLUTION, re.IGNORECASE)
-# The negation here belongs to the resolution, so it is never a shared negator.
-NEGATED_RESOLUTION = re.compile(
-    r"(?:\b(?:not|never|still|yet)\b|n't)\s+(?:\w+\s+){0,3}?" + RESOLUTION, re.IGNORECASE)
-# A modal outstanding unless the clause negates it earlier: "Nothing needs to be
-# addressed." is clean, "The issue should be addressed." is not.
-PENDING_RESOLUTION = re.compile(
-    r"\b(?:needs?|needed|should|must|could|would|might|unless|until|before|to\s+be)\b"
-    r"\s+(?:\w+\s+){0,3}?" + RESOLUTION, re.IGNORECASE)
-# Sentence dashes break a clause like a comma. Built from code points rather than
-# written out, and a bare hyphen only counts when spaced ("well-scoped" must not).
-SENTENCE_DASHES = "".join(chr(code) for code in (8211, 8212, 8213))
-CLAUSE_BREAK = re.compile(
-    r"[;:,.]|[" + SENTENCE_DASHES + r"]|\s-{1,2}\s"
-    r"|\b(?:but|however|except|only|though|although|other\s+than|apart\s+from"
-    # Subordinators: a resolution in the "after ..." clause resolves that clause's
-    # subject, not the main clause's. "as" is left out, since "such as" would split.
-    r"|after|once|when|whenever|because|since|while|whereas|if)\b",
-    re.IGNORECASE,
-)
-COORDINATOR = re.compile(r"\b(?:and|or)\b", re.IGNORECASE)
-NEW_CLAUSE_OPENING = re.compile(
-    r"\s*(?:an?|the|this|that|these|those|some|several|few|many|another|other|any|each|every"
-    r"|one|two|three|four|five|six|seven|eight|nine|ten|\d+"
-    r"|it|its|there|we|they|i|you|he|she)\b",
-    re.IGNORECASE,
-)
-# The value is token-delimited: without the trailing \b a prefix of a malformed value
-# ("NoneAvailable", "0unknown") parses as a clean declaration.
+# So the sentence is matched against an allow-list of human-verified clean sentences
+# instead, and anything else is triage-required. This fails closed: a novel clean
+# sentence costs one human read and a disposition, never a missed finding. Match is
+# normalised for case, surrounding whitespace and trailing punctuation; an empty
+# sentence (verdict plus metadata only) carries no claim and is clean on its own,
+# since the structural counts below still run. Grow the set as clean samples appear.
+CLEAN_SENTENCES = {
+    "the changes are fully reviewed, tested, and have no unresolved blocking issues",
+}
 DECLARED_FINDINGS = re.compile(
     r"\*\*Findings:\*\*[ \t]*(?:(?P<count>\d+)|(?P<none>none))\b", re.IGNORECASE)
 OPEN_COUNT = re.compile(r"\bOpen\s*\((\d+)\)", re.IGNORECASE)
@@ -235,13 +200,11 @@ PREVIOUSLY_MISSED_LABEL = re.compile(r"\bPreviously\s+missed\b", re.IGNORECASE)
 RESOLVED_LABEL = re.compile(r"\bResolved\b", re.IGNORECASE)
 REVIEW_FINDINGS_LIST = re.compile(r"\*\*Review findings:\*\*[ \t]*\n(?P<items>(?:[ \t]*[-*][ \t]+.*(?:\n|$))+)")
 VOTE_TAG = re.compile(r"\((\d+)\s+votes?\)", re.IGNORECASE)
-NUMBER_WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
-                "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10}
-HEADLINE_COUNT = re.compile(
-    r"\b(?P<count>\d+|" + "|".join(NUMBER_WORDS) + r")\s+(?:\w+\s+){0,3}?"
-    r"(?:issues?|findings?|concerns?|problems?|bugs?)\b",
-    re.IGNORECASE,
-)
+
+
+def normalise_sentence(sentence):
+    """Lowercase, collapse whitespace, strip surrounding quotes and trailing marks."""
+    return " ".join(sentence.split()).strip().strip('"\'').casefold().rstrip(".!?")
 
 
 class Overview:
@@ -256,32 +219,13 @@ class Overview:
     where it is tightest.
     """
 
-    def __init__(self, verdict, sentence, declared, open_count, body_only, reasons, warnings):
+    def __init__(self, verdict, sentence, declared, open_count, body_only, reasons):
         self.verdict = verdict
         self.sentence = sentence
         self.declared = declared
         self.open_count = open_count
         self.body_only = body_only
         self.reasons = reasons
-        self.warnings = warnings
-
-
-def names_outstanding(sentence):
-    """True when some clause of `sentence` has a concern word and nothing cancelling it."""
-    for segment in CLAUSE_BREAK.split(sentence):
-        negated = False
-        for position, part in enumerate(COORDINATOR.split(segment)):
-            if position == 0 or NEW_CLAUSE_OPENING.match(part):
-                negated = False
-            if NEGATED_RESOLUTION.search(part):
-                return True
-            pending = PENDING_RESOLUTION.search(part)
-            if pending and not (negated or NEGATOR.search(part[:pending.start()])):
-                return True
-            negated = negated or bool(NEGATOR.search(part) or COMPLETED.search(part))
-            if CONCERN_PROSE.search(part) and not negated:
-                return True
-    return False
 
 
 def _strip_emoji_prefix(heading):
@@ -302,7 +246,6 @@ def parse_overview(body, inline):
     text = body[marker.end():]
     top_level = DETAILS_BLOCK.sub("", text)
     reasons = []
-    warnings = []
 
     heading = VERDICT_HEADING.search(top_level)
     verdict, sentence = None, ""
@@ -365,8 +308,8 @@ def parse_overview(body, inline):
         reasons.append("an overview body with no parsable headline")
     elif verdict.casefold().rstrip(".!") not in CLEAN_VERDICTS:
         reasons.append(f'headline verdict "{verdict}" is not a known-clean verdict')
-    elif names_outstanding(sentence):
-        reasons.append("the headline sentence names something outstanding")
+    elif sentence and normalise_sentence(sentence) not in CLEAN_SENTENCES:
+        reasons.append("the headline sentence is not a known-clean sentence")
     # A declaration that is missing, or says something other than a count or "None",
     # parses to the same value as no declaration. Left alone that is a silent zero:
     # the one number the review states about itself cannot be read, and the verdict
@@ -381,31 +324,10 @@ def parse_overview(body, inline):
         reasons.append(f"lists {open_count} open")
     if body_only:
         reasons.append(f"{body_only} body-only finding{'s' if body_only != 1 else ''}")
-    # "All three issues were resolved." and "No one found any issues." hold a count
-    # word that is not a count of outstanding findings, so a part with a negator or
-    # a completed resolution takes no part in the cross-check. Each count is judged
-    # in its own clause and coordinated part, and every count is checked: a resolved
-    # count must not hide a later one ("Two issues were resolved and three concerns
-    # were identified."), and a clean clause must not hide a count in another ("Three
-    # blocking issues were found, but no nits remain.").
-    parts = [part for clause in CLAUSE_BREAK.split(sentence) for part in COORDINATOR.split(clause)]
-    for part in parts:
-        if NEGATOR.search(part) or COMPLETED.search(part):
-            continue
-        for count_match in HEADLINE_COUNT.finditer(part):
-            said = count_match.group("count").lower()
-            said = NUMBER_WORDS.get(said) or int(said)
-            # Only a count the body also declares can disagree with it.
-            disagreeing = [n for n in (declared, open_count) if n is not None and n != said]
-            if disagreeing:
-                mismatch = f"headline says {said} but the body declares {disagreeing[0]}"
-                reasons.append(mismatch)
-                warnings.append(mismatch)
-                break
-        else:
-            continue
-        break
-    return Overview(verdict, sentence, declared, open_count, body_only, reasons, warnings)
+    # The old sentence/count cross-check is gone with the prose scanner: a sentence
+    # stating a count ("Three unresolved issues ...") is not on the clean allow-list,
+    # so it already triages on the sentence reason above.
+    return Overview(verdict, sentence, declared, open_count, body_only, reasons)
 
 
 def fetch(owner, repo, number):
@@ -501,9 +423,6 @@ def main():
             else:
                 headline = f"{overview.verdict}: {overview.sentence}" if overview.sentence else overview.verdict
                 print(f'  headline="{headline[:300]}"')
-            for warning in overview.warnings:
-                print(f"  WARNING: {warning}; the format may have moved, "
-                      f"read the review body directly")
         for path, text in findings:
             print(f"  - {path}: {text[:300]}")
         # Only meaningful when every block declared a count; with a mixed body

@@ -172,7 +172,7 @@ It is three-state. Collapsing it to a boolean is a bug in opposite directions.
 | State | Condition | Loop action |
 | --- | --- | --- |
 | clean | review at head, nothing posted and nothing suppressed | terminate |
-| triage-required | review at head, and any of: inline comments non-zero, suppressed count non-zero or unparsable, parsed findings disagreeing with a declared count, or an overview body that is not a known-clean verdict with nothing else in it | triage whatever it reported, posted or withheld, then fix, push, re-request |
+| triage-required | review at head, and any of: inline comments non-zero, suppressed count non-zero or unparsable, or an overview body that is not a known-clean verdict and known-clean sentence with nothing else in it | triage whatever it reported, posted or withheld, then fix, push, re-request |
 | not-applicable | no review at head | re-request, or wait if one is pending |
 
 - **Scope the check to the review at `headRefOid`.** A detector that scans every review on the PR
@@ -204,26 +204,25 @@ Copilot's newer review body (marked `<!-- ccr-overview-v2 -->`) can carry a find
 an inline comment nor in a suppressed block, and every one of these shapes read as clean before the
 detector learned them. It prints them as `body_only=N` and `headline="<verdict>: <sentence>"`.
 
-- **The headline is the signal.** `### 🔵 Needs a closer look` plus one sentence, with
+- **The verdict is an allow-list.** `### 🔵 Needs a closer look` plus one sentence, with
   `**Findings:** None`, no list, and zero inline comments, was a real concern on a first review.
   So was `### 🟡 Changes recommended`. Only `🟢 Approval recommended` has been seen on a genuinely
   clean review, so it is the only allow-listed verdict; any other text is triage-required until a
   second clean sample is captured.
-- **A green verdict can still carry a finding.** "No blocking issues were identified; only a minor
-  test naming nit remains." sat under `Approval recommended`. The sentence is scanned for `nit`,
-  `minor`, `remain(s)`, and `consider`; a hit is triage-required, read as "read the body", not clean.
-  A concern word is cancelled by a negator or a completed resolution (`was fixed`, `were addressed`,
-  `is resolved`) in its own clause ("No minor issues remain." and "The minor nit was fixed." are
-  clean). A negated or pending resolution ("was not fixed", "still needs to be fixed", "should be
-  addressed") is outstanding whatever else the clause holds, unless a negator comes first ("Nothing
-  needs to be addressed." is clean). Clauses break on punctuation, sentence dashes (a spaced hyphen
-  or a Unicode dash, not "well-scoped"), "but", "only", "other than", and subordinators ("after",
-  "once", "because", "if"). So "No blocking issues, but a nit remains." is not clean, and neither is
-  "A minor nit remains after the handler was fixed.", since the resolution belongs to the other
-  clause. Across "and" / "or", negation carries into a segment unless it opens
-  with a determiner, number, or pronoun (its own subject), so "No minor or blocking issues remain."
-  is clean and "No blocking issues were identified and a minor nit remains." is not. A leftover with
-  no determiner ("and minor nit remains") is the known miss.
+- **The sentence is an allow-list too, not a parser.** A green verdict can still carry a finding:
+  "No blocking issues were identified; only a minor test naming nit remains." sat under
+  `Approval recommended` with `Findings: None`. So the sentence is load-bearing and cannot be
+  ignored. An earlier version tried to *classify* it, scanning for concern words with negation,
+  coordination, subordination and resolution handling; Copilot produced a new sentence shape that
+  fooled it on nine consecutive rounds, several of them regressions a prior round's fix had
+  introduced. Regex cannot do the reference resolution this needs ("which finding does *was fixed*
+  attach to?"), and every miss was fail-open, which is the one direction this loop must not fail.
+  So the sentence is now matched against a short allow-list of human-verified clean sentences
+  (normalised for case, surrounding whitespace, and trailing punctuation); an empty sentence
+  (verdict plus metadata only) carries no claim and is clean on its own. Anything else is
+  triage-required. This **fails closed**: a novel clean sentence costs one human read and a
+  disposition comment, never a missed finding. Grow the allow-list as clean samples are captured;
+  its growth is monotone and safe, unlike the regex rules, which regressed each other.
 - **Only v2 is verified.** A `ccr-overview-vN` marker other than v2 is still parsed, but its
   headline can never clear the review: a later layout can move findings somewhere the parser does
   not read. Expect the loop to stay at exit `1` with a "layout vN" reason until the parser is
@@ -243,12 +242,6 @@ detector learned them. It prints them as `body_only=N` and `headline="<verdict>:
   value as "nothing declared". Each is triage-required with its own reason, since clearing a review
   on the headline alone while its own tally is unreadable is the silent zero this signal exists to
   prevent.
-- **Counts must agree.** A count in the headline ("Three unresolved ...") that disagrees with
-  `Findings: N` or `Open (N)` prints a warning that the format may have moved, and is triage-required.
-  Each count is judged in its own clause and coordinated part, and a part with a negator or completed
-  resolution ("All three issues were resolved.") takes no part in the cross-check. A resolved count
-  hides nothing else: "Two issues were resolved and three concerns were identified." and "Three
-  blocking issues were found, but no nits remain." both still disagree with `Findings: None`.
 
 A headline finding has no thread to reply on, and a description that honestly lists deferred
 trade-offs can hold the headline at "Needs a closer look" indefinitely. Disposition it the way a
