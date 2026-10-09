@@ -224,7 +224,7 @@ METADATA_LINE = re.compile(
     r"Review\s+effort(?:\s+level)?:\*\*\s*\S+"
     r"|Findings:\*\*\s*(?:\d+(?:\s+[A-Za-z]+)?|None)(?:\s*<[^>]*>)*"
     r"|Comments\s+generated:\*\*\s*\d+"
-    r"|Files\s+reviewed:\*\*\s*\d+/\d+(?:\s+[A-Za-z]+)*"
+    r"|Files\s+reviewed:\*\*\s*\d+/\d+(?:\s+changed\s+files?)?"
     r")\s*",
     re.IGNORECASE)
 # The headline sentence can carry a finding that appears nowhere else: a green

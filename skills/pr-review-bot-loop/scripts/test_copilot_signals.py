@@ -453,6 +453,19 @@ class ClassificationTests(unittest.TestCase):
                                               f"**Review effort:** {effort}")
                 self.assertVerdict([review(HEAD, body=body)], signals.TRIAGE_REQUIRED)
 
+    def test_overview_prose_after_a_files_reviewed_ratio_is_not_hidden(self):
+        """The Files reviewed value is the ratio and the literal "changed file(s)",
+        not arbitrary trailing words that could carry a concern."""
+        body = OVERVIEW_CLEAN.replace(
+            "**Review effort:** Lite",
+            "**Files reviewed:** 1/1 and a boundary case remains unhandled")
+        self.assertVerdict([review(HEAD, body=body)], signals.TRIAGE_REQUIRED)
+
+    def test_overview_files_reviewed_row_is_still_metadata(self):
+        body = (OVERVIEW_MARKER + "### 🟢 Approval recommended\n\n"
+                "**Files reviewed:** 16/16 changed files\n**Findings:** None\n")
+        self.assertVerdict([review(HEAD, body=body)], signals.CLEAN)
+
     def test_overview_emoji_prefixed_metadata_row_is_still_metadata(self):
         """The real layout prefixes the effort row with a badge emoji; it must still
         read as metadata so a verdict-plus-metadata body stays clean."""
