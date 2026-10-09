@@ -187,6 +187,16 @@ OVERVIEW_CLEAN_NESTED_RESOLVED = (
     "<details>\n<summary>The retry has no cap (3 votes)</summary>\n\nb\n</details>\n"
     "</details>\n"
 )
+# A top-level block whose summary merely contains the word "resolved" but is not a
+# "resolved since last review" section: it still carries a live, vote-tagged finding.
+# Only an actual resolved-since-last-review section may be dropped whole; a bare
+# substring match on "resolved" would exclude this block and read CLEAN on a real
+# finding, which is the silent-zero this gate exists to prevent.
+OVERVIEW_RESOLVED_WORD_WITH_OPEN_FINDING = (
+    OVERVIEW_CLEAN +
+    "\n<details>\n<summary><strong>Resolved and open</strong></summary>\n\n"
+    "- moderate the handler drops errors (2 votes)\n</details>\n"
+)
 OVERVIEW_UNKNOWN_HEADLINE = (
     OVERVIEW_MARKER + "### 🟣 Looks different today\n\nSomething.\n\n**Findings:** None\n"
 )
@@ -393,6 +403,13 @@ class ClassificationTests(unittest.TestCase):
         no child's vote tag leaks past a non-greedy details match."""
         self.assertVerdict([review(HEAD, body=OVERVIEW_CLEAN_NESTED_RESOLVED)],
                            signals.CLEAN)
+
+    def test_overview_resolved_word_in_summary_does_not_drop_a_live_finding(self):
+        """Only a "resolved since last review" section is excluded whole. A block
+        whose summary merely contains "resolved" alongside a live, vote-tagged
+        finding must still count: a bare-substring match would silently drop it."""
+        self.assertVerdict([review(HEAD, body=OVERVIEW_RESOLVED_WORD_WITH_OPEN_FINDING)],
+                           signals.TRIAGE_REQUIRED)
 
     def test_overview_only_the_known_clean_sentence_is_clean(self):
         """The sentence is matched against an allow-list, not parsed. Case,
@@ -810,6 +827,12 @@ class OverviewParserTests(unittest.TestCase):
         body = OVERVIEW_CLEAN_NESTED_RESOLVED.replace(
             "2 resolved since last review", "2 open findings")
         self.assertEqual(signals.parse_overview(body, inline=0).body_only, 2)
+
+    def test_resolved_word_without_the_full_label_still_counts_its_findings(self):
+        """The whole-block exclusion is scoped to a resolved-since-last-review
+        section, not any summary containing "resolved"."""
+        overview = signals.parse_overview(OVERVIEW_RESOLVED_WORD_WITH_OPEN_FINDING, inline=0)
+        self.assertEqual(overview.body_only, 1)
 
     def test_a_future_marker_version_is_parsed_but_never_clean(self):
         """The layout is verified for v2 only. A later version can move findings

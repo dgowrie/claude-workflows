@@ -273,7 +273,12 @@ PREVIOUSLY_MISSED = re.compile(r"\bPreviously\s+missed\s*\((\d+)\)", re.IGNORECA
 # but gives no count is not zero findings, it is a count that could not be read.
 OPEN_LABEL = re.compile(r"^\W*Open\b", re.IGNORECASE)
 PREVIOUSLY_MISSED_LABEL = re.compile(r"\bPreviously\s+missed\b", re.IGNORECASE)
-RESOLVED_LABEL = re.compile(r"\bResolved\b", re.IGNORECASE)
+# Scoped to Copilot's observed label, not a bare `resolved`: this is the only
+# matcher that EXCLUDES a block from the count, so a loose match drops a whole
+# <details> subtree and fails open (a live finding in a block whose summary merely
+# mentions "resolved" reads CLEAN). A narrower label can only count more blocks,
+# never fewer, so an unrecognised resolved phrasing fails closed (over-triage).
+RESOLVED_LABEL = re.compile(r"resolved\s+since\s+last\s+review", re.IGNORECASE)
 REVIEW_FINDINGS_LIST = re.compile(r"\*\*Review findings:\*\*[ \t]*\n(?P<items>(?:[ \t]*[-*][ \t]+.*(?:\n|$))+)")
 VOTE_TAG = re.compile(r"\((\d+)\s+votes?\)", re.IGNORECASE)
 
