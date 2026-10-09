@@ -115,6 +115,7 @@ DETAILS_BLOCK = re.compile(
 # findings into the count, so its ranges are walked with a depth counter instead,
 # keeping each top-level <details> whole.
 DETAILS_TAG = re.compile(r"<details\b|</details>", re.IGNORECASE)
+DETAILS_OPEN = re.compile(r"<details\b", re.IGNORECASE)
 SUMMARY_TAG = re.compile(r"<summary[^>]*>(?P<summary>.*?)</summary>", re.DOTALL | re.IGNORECASE)
 
 
@@ -341,12 +342,24 @@ def parse_overview(body, inline):
     previously_missed = 0
     unreadable_counts = []
     counted_blocks = []
+    malformed_block = False
     # Each top-level block is read by its own <summary>, and a resolved one is dropped
     # whole (nested children included) so none of its vote tags leaks into the count.
     for block, summary in top_level_details(text):
+        if not summary.strip():
+            # A top-level block with no readable <summary> cannot be classified, and
+            # strip_top_level_details drops its text from the sentence, so a concern
+            # inside it would vanish. Fail closed rather than treat it as benign.
+            malformed_block = True
+            continue
         missed_match = PREVIOUSLY_MISSED.search(summary)
         if missed_match:
-            previously_missed += int(missed_match.group(1))
+            # Do not trust the declared count over the block's own entries: a "(0)"
+            # label on a block that still nests findings is a silent zero. Count the
+            # nested detail entries (all <details> inside, less this outer one) and
+            # take the larger.
+            nested = max(0, len(DETAILS_OPEN.findall(block)) - 1)
+            previously_missed += max(int(missed_match.group(1)), nested)
         elif PREVIOUSLY_MISSED_LABEL.search(summary):
             unreadable_counts.append("Previously missed")
         open_match = OPEN_COUNT.search(summary)
@@ -394,6 +407,8 @@ def parse_overview(body, inline):
         reasons.append("no parsable Findings declaration")
     for label in unreadable_counts:
         reasons.append(f"a {label} block with no parsable count")
+    if malformed_block:
+        reasons.append("a details block with no readable summary")
     if declared:
         reasons.append(f"declares {declared} finding{'s' if declared != 1 else ''}")
     if open_count:

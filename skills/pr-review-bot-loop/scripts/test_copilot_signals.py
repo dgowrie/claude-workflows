@@ -525,9 +525,24 @@ class ClassificationTests(unittest.TestCase):
         body = OVERVIEW_CLEAN + PREVIOUSLY_MISSED_BLOCK.format(count=1)
         self.assertVerdict([review(HEAD, body=body)], signals.TRIAGE_REQUIRED)
 
-    def test_overview_previously_missed_zero_is_clean(self):
-        body = OVERVIEW_CLEAN + PREVIOUSLY_MISSED_BLOCK.format(count=0)
+    def test_overview_previously_missed_zero_and_genuinely_empty_is_clean(self):
+        body = OVERVIEW_CLEAN + (
+            "\n<details>\n<summary><strong>Previously missed (0)</strong></summary>\n\n"
+            "In code that hasn't changed since last review\n</details>\n")
         self.assertVerdict([review(HEAD, body=body)], signals.CLEAN)
+
+    def test_overview_previously_missed_zero_with_nested_entries_requires_triage(self):
+        """A (0) label over a block that still lists findings is a silent zero: the
+        declared count is not trusted against the block's actual entries."""
+        body = OVERVIEW_CLEAN + PREVIOUSLY_MISSED_BLOCK.format(count=0)
+        self.assertVerdict([review(HEAD, body=body)], signals.TRIAGE_REQUIRED)
+
+    def test_overview_details_block_without_a_summary_fails_closed(self):
+        """A top-level block whose summary cannot be read is a parse failure, not a
+        benign block; its content is dropped from the sentence, so it must triage."""
+        body = OVERVIEW_CLEAN + (
+            "\n<details>\n\nA boundary case remains unhandled.\n</details>\n")
+        self.assertVerdict([review(HEAD, body=body)], signals.TRIAGE_REQUIRED)
 
     def test_overview_marker_is_scoped_to_the_review_at_head(self):
         self.assertVerdict(
