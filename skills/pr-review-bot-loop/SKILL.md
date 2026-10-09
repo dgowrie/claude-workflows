@@ -245,9 +245,11 @@ detector learned them. It prints them as `body_only=N` and `headline="<verdict>:
 
 A headline finding has no thread to reply on, and a description that honestly lists deferred
 trade-offs can hold the headline at "Needs a closer look" indefinitely. Disposition it the way a
-suppressed finding is dispositioned: a PR comment, so exit `1` on that headline alone can end the
-loop under step 1. When a headline concern has no counterpart in the code, check the PR description
-first; a stale description produces headline findings by itself.
+suppressed finding is dispositioned, which is the same split the loop uses for any threadless
+finding: the commit message that fixes it, or a PR comment when you decline it. Either records it
+where the detector's inputs live, so exit `1` on that headline alone can end the loop under step 1.
+When a headline concern has no counterpart in the code, check the PR description first; a stale
+description produces headline findings by itself.
 
 **Validate a detector against a known-positive PR, and across a state transition.** Both parser
 traps and both scoping traps were found by running the thing against PRs whose answers were already
