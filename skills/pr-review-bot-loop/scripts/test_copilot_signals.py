@@ -428,7 +428,7 @@ class ClassificationTests(unittest.TestCase):
         yields the same value as a clean review, which is the silent zero."""
         for replacement in ("**Findings:** Unknown", "**Findings:**", "Findings: None", "",
                             "**Findings:** NoneAvailable", "**Findings:** 0unknown",
-                            "**Findings:** None2"):
+                            "**Findings:** None2", "**Findings:** 0.5", "**Findings:** 1.0"):
             with self.subTest(replacement=replacement):
                 body = OVERVIEW_CLEAN.replace("**Findings:** None", replacement)
                 self.assertVerdict([review(HEAD, body=body)], signals.TRIAGE_REQUIRED)

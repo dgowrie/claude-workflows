@@ -186,8 +186,12 @@ VERDICT_HEADING = re.compile(r"^###[ \t]+(?P<heading>.+?)[ \t]*$", re.MULTILINE)
 CLEAN_SENTENCES = {
     "the changes are fully reviewed, tested, and have no unresolved blocking issues",
 }
+# The value is terminated, not just word-bounded: a bare \b accepts a prefix of a
+# malformed value, parsing "NoneAvailable" and "0.5" as a clean declaration. Require
+# the token to end at whitespace, markup, or end of input, so a decimal or a glued
+# suffix fails to parse and falls through to triage.
 DECLARED_FINDINGS = re.compile(
-    r"\*\*Findings:\*\*[ \t]*(?:(?P<count>\d+)|(?P<none>none))\b", re.IGNORECASE)
+    r"\*\*Findings:\*\*[ \t]*(?:(?P<count>\d+)|(?P<none>none))(?=[\s<]|$)", re.IGNORECASE)
 OPEN_COUNT = re.compile(r"\bOpen\s*\((\d+)\)", re.IGNORECASE)
 # A standalone block of findings in code the review says did not change. It has no
 # inline thread and no vote tag, so under a green headline it is the only place the
