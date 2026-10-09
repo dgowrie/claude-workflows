@@ -238,12 +238,15 @@ METADATA_LINE = re.compile(
 CLEAN_SENTENCES = {
     "the changes are fully reviewed, tested, and have no unresolved blocking issues",
 }
-# The value is terminated, not just word-bounded: a bare \b accepts a prefix of a
-# malformed value, parsing "NoneAvailable" and "0.5" as a clean declaration. Require
-# the token to end at whitespace, markup, or end of input, so a decimal or a glued
-# suffix fails to parse and falls through to triage.
+# The value must end at the line or markup boundary, not just be followed by
+# whitespace: a trailing-whitespace lookahead accepts appended prose ("None A
+# boundary case remains.") as a clean declaration, and the same line is then skipped
+# as metadata so the concern never reaches the allow-list. A count may carry one
+# severity word ("2 moderate", "0 low"); anything more, a decimal, or glued text
+# fails to parse and falls through to triage. MULTILINE so `$` is the line end.
 DECLARED_FINDINGS = re.compile(
-    r"\*\*Findings:\*\*[ \t]*(?:(?P<count>\d+)|(?P<none>none))(?=[\s<]|$)", re.IGNORECASE)
+    r"\*\*Findings:\*\*[ \t]*(?:(?P<count>\d+)(?:[ \t]+[A-Za-z]+)?|(?P<none>none))[ \t]*(?=<|$)",
+    re.IGNORECASE | re.MULTILINE)
 OPEN_COUNT = re.compile(r"\bOpen\s*\((\d+)\)", re.IGNORECASE)
 # A standalone block of findings in code the review says did not change. It has no
 # inline thread and no vote tag, so under a green headline it is the only place the
