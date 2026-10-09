@@ -544,6 +544,17 @@ class ClassificationTests(unittest.TestCase):
             "\n<details>\n\nA boundary case remains unhandled.\n</details>\n")
         self.assertVerdict([review(HEAD, body=body)], signals.TRIAGE_REQUIRED)
 
+    def test_overview_nested_summary_is_not_read_as_the_outer_blocks_own(self):
+        """An outer block with no summary must not borrow a nested child's. A nested
+        "Resolved" summary could otherwise exclude the whole outer block and drop an
+        unresolved concern in it."""
+        body = OVERVIEW_CLEAN + (
+            "\n<details>\n"
+            "<details><summary><strong>1 resolved since last review</strong></summary>\n"
+            "- an old finding\n</details>\n"
+            "A boundary case remains unhandled.\n</details>\n")
+        self.assertVerdict([review(HEAD, body=body)], signals.TRIAGE_REQUIRED)
+
     def test_overview_marker_is_scoped_to_the_review_at_head(self):
         self.assertVerdict(
             [review(OLD, body=OVERVIEW_HEADLINE_CONCERN), review(HEAD, body=OVERVIEW_CLEAN)],

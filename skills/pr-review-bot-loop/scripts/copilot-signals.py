@@ -140,11 +140,19 @@ def _top_level_detail_ranges(text):
 
 
 def top_level_details(text):
-    """Yield (full_text, summary) for each top-level <details> block."""
+    """Yield (full_text, summary) for each top-level <details> block.
+
+    The summary is the block's OWN, which must appear before any nested <details>.
+    A nested child's summary is not borrowed: an outer block with no summary of its
+    own reports an empty one (and so fails closed) rather than a nested "Resolved"
+    summary that would wrongly exclude the whole outer block.
+    """
     for start, end in _top_level_detail_ranges(text):
         block = text[start:end]
+        opens = [m.start() for m in DETAILS_OPEN.finditer(block)]
+        first_nested = opens[1] if len(opens) > 1 else len(block)
         summary = SUMMARY_TAG.search(block)
-        yield block, (summary.group("summary") if summary else "")
+        yield block, (summary.group("summary") if summary and summary.start() < first_nested else "")
 
 
 def strip_top_level_details(text):
