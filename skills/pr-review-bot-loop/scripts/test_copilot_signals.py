@@ -441,6 +441,14 @@ class ClassificationTests(unittest.TestCase):
                     "blocking issues.", sentence)
                 self.assertVerdict([review(HEAD, body=body)], signals.TRIAGE_REQUIRED)
 
+    def test_overview_a_second_prose_paragraph_is_not_ignored(self):
+        """Every non-metadata paragraph must be allow-listed. The known-clean
+        sentence cannot carry a concern in a paragraph after it."""
+        body = OVERVIEW_CLEAN.replace(
+            "**Review effort:** Lite",
+            "A boundary case remains unhandled.\n\n**Review effort:** Lite")
+        self.assertVerdict([review(HEAD, body=body)], signals.TRIAGE_REQUIRED)
+
     def test_overview_a_formatted_sentence_is_prose_not_skipped_metadata(self):
         """Only the known metadata labels are skipped. A bold- or markup-wrapped
         concern must read as a sentence and fail the allow-list, not vanish."""

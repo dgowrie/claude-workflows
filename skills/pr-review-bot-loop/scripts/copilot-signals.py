@@ -304,22 +304,22 @@ def parse_overview(body, inline):
     reasons = []
 
     heading = VERDICT_HEADING.search(top_level)
-    verdict, sentence = None, ""
+    verdict, prose = None, []
     if heading:
         verdict = _strip_emoji_prefix(heading.group("heading"))
-        # The sentence is the first paragraph after the heading that is not the
-        # metadata block. Only the known metadata labels are skipped: a paragraph
-        # whose every line is a recognised `**Label:**` row is metadata, so an empty
-        # sentence stays empty. Anything else, including bold or markup-wrapped prose
-        # ("**A boundary case remains.**"), is the sentence and must reach the
-        # allow-list rather than being skipped as formatting and read as clean.
+        # Collect every prose paragraph after the heading, not just the first: a
+        # concern can sit in a paragraph after the allow-listed sentence, and reading
+        # only the first lets it clear. Only the known metadata labels are skipped (a
+        # paragraph whose every line is a recognised `**Label:**` row); anything else,
+        # including bold or markup-wrapped prose ("**A boundary case remains.**"), is
+        # prose and must reach the allow-list rather than being skipped as formatting.
         paragraphs = [p.strip() for p in re.split(r"\n\s*\n", top_level[heading.end():]) if p.strip()]
         for paragraph in paragraphs:
             lines = [line.strip() for line in paragraph.splitlines() if line.strip()]
             if lines and all(METADATA_LINE.match(line) for line in lines):
                 continue
-            sentence = " ".join(paragraph.split())
-            break
+            prose.append(" ".join(paragraph.split()))
+    sentence = " ".join(prose)
 
     declared_match = DECLARED_FINDINGS.search(top_level)
     declared = None
@@ -373,7 +373,7 @@ def parse_overview(body, inline):
         reasons.append("an overview body with no parsable headline")
     elif verdict.casefold().rstrip(".!") not in CLEAN_VERDICTS:
         reasons.append(f'headline verdict "{verdict}" is not a known-clean verdict')
-    elif sentence and normalise_sentence(sentence) not in CLEAN_SENTENCES:
+    elif any(normalise_sentence(p) not in CLEAN_SENTENCES for p in prose):
         reasons.append("the headline sentence is not a known-clean sentence")
     # A declaration that is missing, or says something other than a count or "None",
     # parses to the same value as no declaration. Left alone that is a silent zero:
