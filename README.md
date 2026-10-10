@@ -81,6 +81,8 @@ Changes to a skill file in the repo are immediately live — no copy or sync ste
 - [`/transitive-dep-cve-fixes`](skills/transitive-dep-cve-fixes/SKILL.md) - run the range test before pinning: a lockfile re-resolution beats a `resolutions`/`overrides` pin whenever the parent ranges already admit the fix
 - [`/session-wrapup`](skills/session-wrapup/SKILL.md) - at session end, audit memories for staleness and surface leftover worktrees, stale branches, background processes, and temp files with cleanup commands (no destructive action without confirmation)
 - [`/author-review-guidance`](skills/author-review-guidance/SKILL.md) - post review-guidance comments on your own PRs as a single review submission: walkthrough as review body, inline `:notebook:` comments threaded below for anything a reviewer would predictably ask "why this way?" about
+- [`/handoff`](skills/handoff/SKILL.md) - compact the current session into a handoff document a fresh session can pick up
+- [`/pickup`](skills/pickup/SKILL.md) - the other end of `/handoff`: triage a handoff document, then implement, validate, and drive the review cycle to a reviewed PR. Three modes (`afk`, `semi`, `hitl`); hard-stops on a blocker and halts on a mode mismatch. Ships with `scripts/preflight.py`
 
 ### Rules
 
