@@ -249,6 +249,17 @@ class GitFacts(unittest.TestCase):
         self.assertIsNone(facts["default_branch"])
         self.assertFalse(facts["on_default_branch"])
 
+    def test_local_main_is_not_the_default_when_the_remote_lacks_it(self):
+        """By the time the local fallback runs, `origin/main` and
+        `origin/master` are known absent, so with a remote it can only name a
+        branch Phase 1 then fails to find as `origin/<default>`."""
+        upstream = make_repo(default_branch="develop")
+        repo = make_repo()
+        add_remote(repo, upstream)
+        facts = preflight.git_facts(repo)
+        self.assertIsNone(facts["default_branch"])
+        self.assertFalse(facts["on_default_branch"])
+
     def test_default_branch_containing_a_slash_is_kept_whole(self):
         upstream = make_repo(default_branch="release/x")
         repo = make_repo(default_branch="trunk")

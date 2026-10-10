@@ -34,8 +34,8 @@ Known bounds:
   be faithful rather than conservative. An unreadable CODEOWNERS reports
   `readable: false` rather than an empty owner list.
 * The default branch is read from `origin/HEAD`, then from an `origin/main` or
-  `origin/master` ref, then from a local `main` or `master`. Only a repo with no
-  remote falls back to its current branch; a repo with a remote that resolves
+  `origin/master` ref. Only a repo with no remote falls back to a local `main`
+  or `master`, then to its current branch; a repo with a remote that resolves
   none of these reports `default-branch-unknown` rather than a guess.
 * Resume detection looks for the exact citation line `/pickup` writes, naming
   the handoff document's basename, in the viewer's own open PR bodies. Two of
@@ -138,6 +138,11 @@ def _probe(check, path):
         return None
 
 
+def _ref_exists(ref, cwd):
+    code, _ = run(["git", "show-ref", "--verify", "--quiet", ref], cwd)
+    return code == 0
+
+
 def _current_branch(cwd):
     """The checked-out branch name, or None when HEAD is detached.
 
@@ -157,10 +162,10 @@ def _default_branch(cwd, current_branch, unborn):
     """The default branch, or None when it cannot be established.
 
     Resolution runs from most to least authoritative: `origin/HEAD`, then an
-    `origin/main` or `origin/master` ref, then a local `main` or `master`. Only
-    a repo with no remote at all falls back to the current branch. With a
-    remote configured that fallback is a guess that reads as a fact: on a
-    feature branch it reports the feature branch as the default.
+    `origin/main` or `origin/master` ref. Only a repo with no remote at all
+    falls back to a local `main` or `master`, then the current branch. With a
+    remote configured those fallbacks are guesses that read as facts: on a
+    feature branch the last one reports the feature branch as the default.
     """
     code, out = run(["git", "symbolic-ref", "--quiet", ORIGIN_PREFIX + "HEAD"], cwd)
     ref = out.strip()
@@ -168,17 +173,18 @@ def _default_branch(cwd, current_branch, unborn):
         # Strip the prefix rather than splitting on "/": a default branch may
         # itself contain one, as in `release/x`.
         return ref[len(ORIGIN_PREFIX):]
-    for ref_prefix in (ORIGIN_PREFIX, "refs/heads/"):
-        for candidate in ("main", "master"):
-            code, _ = run(
-                ["git", "show-ref", "--verify", "--quiet", ref_prefix + candidate],
-                cwd,
-            )
-            if code == 0:
-                return candidate
+    for candidate in ("main", "master"):
+        if _ref_exists(ORIGIN_PREFIX + candidate, cwd):
+            return candidate
+    # Local refs only count without a remote. With one, `origin/main` and
+    # `origin/master` are already known absent here, so a local name would be
+    # a base Phase 1 cannot find as `origin/<default>`.
     code, remotes = run(["git", "remote"], cwd)
     if code != 0 or remotes.strip():
         return None
+    for candidate in ("main", "master"):
+        if _ref_exists(BRANCH_PREFIX + candidate, cwd):
+            return candidate
     # An unborn branch has a name but nothing on it, so it is no base to branch
     # from; reporting it as the default would make it trivially "on" default.
     return None if unborn else current_branch
