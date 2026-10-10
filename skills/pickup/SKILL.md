@@ -38,7 +38,7 @@ For the mode gate, strictness runs `afk` < `semi` < `hitl`. The order is by how 
    That installed path is the one to use. A run happens in the project the handoff document describes, which is almost never this repo, so a repo-relative path resolves to nothing.
 2. Write the triage file immediately, carrying the preflight result and any blockers it reported. Every later step updates it in place, and every stop below updates it before stopping, so the run always leaves this artifact behind.
 3. On a non-zero exit, stop. On exit 1 (blocked) or 3 (the script crashed) print each blocker with its detail; on exit 2 (usage error) or any other code print the raw output. This holds in every mode, and `--force` does not reach it.
-4. Read the handoff document and every issue, PR, and file it references.
+4. Read the handoff document and every issue, PR, and file it references. Preflight checked only the handoff document itself, so a reference that cannot be read is an Unreadable input hard blocker: stop, printed the same way as a preflight blocker.
 5. Build the acceptance criteria table, fixing each criterion's verification method now, while the work still looks easy.
 6. Classify every open question against the taxonomies in `TRIAGE.md`. A hard blocker stops the run here, printed the same way as a preflight blocker.
 7. Count the user-visible judgment calls and recommend a mode.
@@ -48,9 +48,9 @@ Phase 0 is done when every acceptance criterion carries a verification method, e
 
 ## Phase 1: Branch
 
-When preflight reported an existing pull request, this run is a resume: read that PR's description for the state the earlier run reached, and re-enter at the phase its Outstanding section points to.
+When preflight reported an `existing_pr`, this run is a resume. Check it out with `gh pr checkout <existing_pr.number>`, which also handles a branch that is not local yet; if the local branch has diverged from the pull request's head, stop rather than reconcile the two. Then read the description for the state the earlier run reached, and re-enter at the phase its Outstanding section points to.
 
-Otherwise, on the default branch, branch as `type/<issue#>-<slug>`, taking the issue from the handoff document and falling back to `type/<slug>` from its title. `type` is the Conventional Commits type matching the work. Branch from `origin/<default_branch>` after fetching when the repo has a remote, and from the local `<default_branch>` when it does not; take `default_branch` from the Phase 0 preflight JSON rather than assuming `main`, since preflight resolves it and repos differ. On a feature branch already, keep it; the handoff most likely came from a session that made it.
+Otherwise, on the default branch, branch as `type/<issue#>-<slug>`, taking the issue from the handoff document and falling back to `type/<slug>` from its title. `type` is the Conventional Commits type matching the work. Branch from `origin/<default_branch>` after fetching when the repo has a remote, and from the local `<default_branch>` when it does not; take `default_branch` from the Phase 0 preflight JSON rather than assuming `main`, since preflight resolves it and repos differ. On a feature branch already, keep it; the handoff most likely came from a session that made it. Preflight has already blocked the run (`branch-has-other-pr`) if that branch carries a pull request other than this run's.
 
 Phase 1 is done when the branch is a feature branch and its name has been printed.
 
@@ -68,7 +68,11 @@ Phase 2 is done when every acceptance criterion carries evidence or is explicitl
 
 Run the full test suite, the typechecker, and the linter, with lint clean meaning zero warnings in touched files. Lint autofix lands as its own commit. Push, then wait for CI: CI is authoritative, and local green is necessary rather than sufficient.
 
-Phase 3 is done when the suite, typecheck, and lint are green locally and CI is green on the pushed head.
+Checks can take a few minutes to register after a push, so "no checks reported" straight away is not evidence of no CI. Treat the repository as having no CI only when nothing has registered after several minutes and it has no workflow files under `.github/workflows/`; then local green is the bar, and the description says so.
+
+Cap fix-and-push attempts at 3. When the cap is reached, or a failure also reproduces on `origin/<default_branch>` and so predates this run, stop: the pull request stays a draft, the failure goes under Outstanding with what was tried, and the run notifies. A run that cannot get to green says so rather than handing a red pull request to review.
+
+Phase 3 is done when the suite, typecheck, and lint are green locally and CI is green on the pushed head, or the repository has no CI and the description records that.
 
 ## Phase 4: Review cycle
 
@@ -82,9 +86,9 @@ Route each finding:
 | Wrong | Reply `:thought_balloon: <rationale>`, leave the thread open |
 | Real but past the acceptance criteria | Record under Outstanding; raise a follow-up issue when it warrants one |
 
-Cap the run at 3 cycles. On exhaustion, stop, leave the pull request as it stands, and write what remains open and why. A run that reports honestly on an unconverged pull request is worth more than one that keeps grinding or declares victory.
+Cap the run at 3 cycles. On exhaustion, stop without entering Phase 5: the pull request stays a draft, no reviewer is requested, the description's Outstanding section records what remains open and why, and the run notifies. A run that reports honestly on an unconverged pull request is worth more than one that keeps grinding or declares victory.
 
-Phase 4 is done when a full cycle completes with a clean bot pass and zero new confirmed findings, or when the third cycle ends.
+Phase 4 is done when a full cycle completes with a clean bot pass and zero new confirmed findings.
 
 ## Phase 5: Hand back
 
@@ -94,14 +98,14 @@ Mark the pull request ready for review. Resolve reviewers by re-running prefligh
 ~/.claude/skills/pickup/scripts/preflight.py --handoff-doc <path> --cwd <repo> --paths <changed files>
 ```
 
-Phase 5 consumes only the `codeowners` field, so a non-zero exit here is worth printing but does not abort the hand-back: by this point the run's own PR exists and a build artifact left in the tree is enough to report a blocker. Fall back to a reviewer named in the handoff document, and when neither yields one, say so rather than guessing at a person. Update the description a final time and print a summary: criteria met, criteria unverified, decisions taken, anything outstanding.
+Phase 5 consumes only the `codeowners` field, so a non-zero exit here is worth printing but does not abort the hand-back: by this point the run's own PR exists and a build artifact left in the tree is enough to report a blocker. When `codeowners.readable` is false, CODEOWNERS exists but could not be read: say so in the summary, naming the file, rather than reporting that nobody owns the code. Fall back to a reviewer named in the handoff document, labelled as a fallback, and when neither yields one, say so rather than guessing at a person. Update the description a final time and print a summary: criteria met, criteria unverified, decisions taken, anything outstanding.
 
 Phase 5 is done when the pull request is ready for review, a reviewer is requested or their absence is stated, and the summary is printed.
 
 ## Mandate
 
-Invoking this skill authorizes it, for this one pull request and this run only, to commit, push, publish review replies, and request a reviewer without asking again. This is a deliberate carve-out: the standing convention is to stage review comments for the human to submit, and an unattended run has nobody to ask.
+Invoking this skill authorizes it, for this run only and only on the run's pull request, to do the following without asking again: commit and push to the run's branch; open the draft pull request and edit its description; post `:notebook:` inline comments and review replies on it; request reviewers, including re-requesting an automated reviewer; mark it ready for review; and open follow-up issues for out-of-scope findings. The run's pull request is the one it opened in Phase 2, or the `existing_pr` it resumed in Phase 1. This is a deliberate carve-out: the standing convention is to stage review comments for the human to submit, and an unattended run has nobody to ask.
 
-These stay the human's, in every mode: merging, force-pushing, changing repository visibility, and touching any pull request other than the one this run created.
+These stay the human's, in every mode: merging, force-pushing, changing repository visibility, and touching any pull request other than the run's own.
 
-Notify at exactly four moments, so that a notification always means something happened: a triage hard stop, a mode mismatch halt, cycle-cap exhaustion, and successful completion.
+Notify at exactly these moments, so that a notification always means something happened: any Phase 0 stop (a preflight blocker or crash, a triage hard blocker, or a mode mismatch halt), a Phase 3 stop, cycle-cap exhaustion, and successful completion. Notify with the `PushNotification` tool where the session has it; otherwise make the notice the last line of output.

@@ -22,7 +22,7 @@ Stop the run. These hold in every mode, and `--force` does not reach them.
 | Missing access | Credentials absent, a required service down, a repo unreachable. |
 | Dirty tree | Uncommitted or untracked changes of unknown origin. `preflight.py` reports this one. |
 
-`preflight.py` settles unreadable input, missing access, and dirty tree mechanically. The rest are yours to judge, and they are the reason triage is a reading task rather than a script.
+`preflight.py` settles only part of this mechanically: the handoff document's own readability, `gh` access, and the tree state. The rest is yours to judge, including whether the issues, PRs, and files the handoff document references can be read (Phase 0 step 4) and whether a required service is reachable. That is the reason triage is a reading task rather than a script.
 
 ### Judgment calls
 
