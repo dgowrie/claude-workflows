@@ -182,6 +182,30 @@ class Run(unittest.TestCase):
         self.assertEqual(preflight.run(["git", "status"], missing), (1, ""))
 
 
+def git_unchecked(repo, *args):
+    """For git commands expected to stop partway with a non-zero exit."""
+    subprocess.run(
+        ["git", *GIT_IDENTITY, *args],
+        cwd=repo,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
+def start_empty_cherry_pick(repo):
+    """Leave a cherry-pick stopped with nothing left to commit.
+
+    The picked change is already on main, so the tree is clean and only
+    CHERRY_PICK_HEAD records that an operation is in flight.
+    """
+    git(repo, "checkout", "-q", "-b", "side")
+    (repo / "README.md").write_text("changed\n")
+    git(repo, "commit", "-q", "-am", "change")
+    git(repo, "checkout", "-q", "main")
+    git(repo, "cherry-pick", "side")
+    git_unchecked(repo, "cherry-pick", "side")
+
+
 class GitFacts(unittest.TestCase):
     def test_clean_repo_on_default_branch(self):
         repo = make_repo()
@@ -221,6 +245,45 @@ class GitFacts(unittest.TestCase):
         repo = make_repo()
         git(repo, "checkout", "-q", "--detach")
         self.assertIsNone(preflight.git_facts(repo)["current_branch"])
+
+    def test_no_operation_in_a_quiet_repo(self):
+        self.assertIsNone(preflight.git_facts(make_repo())["operation_in_progress"])
+
+    def test_merge_in_progress_is_reported(self):
+        repo = make_repo()
+        git(repo, "checkout", "-q", "-b", "side")
+        (repo / "side.txt").write_text("side\n")
+        git(repo, "add", "side.txt")
+        git(repo, "commit", "-q", "-m", "side")
+        git(repo, "checkout", "-q", "main")
+        git(repo, "merge", "-q", "--no-commit", "--no-ff", "side")
+        self.assertEqual(preflight.git_facts(repo)["operation_in_progress"], "merge")
+
+    def test_empty_cherry_pick_reads_clean_but_is_reported(self):
+        """Nothing left to commit, so the tree looks clean. The next commit
+        would still complete the cherry-pick, and on a kept feature branch a
+        stopped merge would turn it into a two-parent merge commit."""
+        repo = make_repo()
+        start_empty_cherry_pick(repo)
+        facts = preflight.git_facts(repo)
+        self.assertTrue(facts["tree_clean"])
+        self.assertEqual(facts["operation_in_progress"], "cherry-pick")
+
+    def test_operation_in_a_linked_worktree_is_reported(self):
+        """In a linked worktree `.git` is a file, not a directory, so state
+        files have to be located through git rather than under `cwd/.git`."""
+        repo = make_repo()
+        linked = Path(tempfile.mkdtemp()) / "linked"
+        git(repo, "worktree", "add", "-q", "-b", "wt", str(linked))
+        git(linked, "checkout", "-q", "-b", "side")
+        (linked / "side.txt").write_text("side\n")
+        git(linked, "add", "side.txt")
+        git(linked, "commit", "-q", "-m", "side")
+        git(linked, "checkout", "-q", "wt")
+        git(linked, "merge", "-q", "--no-commit", "--no-ff", "side")
+        self.assertEqual(
+            preflight.git_facts(linked)["operation_in_progress"], "merge"
+        )
 
     def test_master_repo_detected_as_default(self):
         repo = make_repo(default_branch="master")
@@ -890,6 +953,14 @@ class Blockers(unittest.TestCase):
             result = preflight.collect(repo, make_handoff_doc())
         self.assertIn("gh-viewer-unknown", [b["code"] for b in result["blockers"]])
 
+    def test_operation_in_progress_blocks_even_on_a_clean_tree(self):
+        repo = make_repo()
+        start_empty_cherry_pick(repo)
+        result = self.collect(repo, make_handoff_doc())
+        self.assertIn(
+            "operation-in-progress", [b["code"] for b in result["blockers"]]
+        )
+
     def test_unknown_default_branch_blocks(self):
         """Phase 1 branches from the default branch. A guess there either
         builds on the wrong base or abandons the branch the handoff came from."""
@@ -941,6 +1012,7 @@ class Blockers(unittest.TestCase):
             lambda repo: git(repo, "branch", "-q", "-m", "trunk"),
             lambda repo: add_remote(repo, upstream),
         ), doc, {}
+        yield "operation-in-progress", repo_with(start_empty_cherry_pick), doc, {}
         yield "dirty-tree", repo_with(
             lambda repo: (repo / "stray.txt").write_text("x\n")
         ), doc, {}

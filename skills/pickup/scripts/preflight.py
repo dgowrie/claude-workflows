@@ -190,6 +190,43 @@ def _default_branch(cwd, current_branch, unborn):
     return None if unborn else current_branch
 
 
+# State git leaves while an operation is stopped partway, and its name. A
+# stopped operation can leave nothing to commit, so the tree reads as clean,
+# yet the next commit completes it: a stopped merge turns the run's first
+# commit into a merge commit carrying another branch's history.
+OPERATION_MARKERS = (
+    ("MERGE_HEAD", "merge"),
+    ("CHERRY_PICK_HEAD", "cherry-pick"),
+    ("REVERT_HEAD", "revert"),
+    ("rebase-merge", "rebase"),
+    ("rebase-apply", "rebase"),
+    ("sequencer", "sequencer"),
+)
+
+
+def _operation_in_progress(cwd):
+    """The stopped operation's name, None when there is none, or "unknown".
+
+    Located through `rev-parse --git-path`, because in a linked worktree `.git`
+    is a file and the state lives elsewhere. A failed lookup is "unknown"
+    rather than None, so it blocks instead of reading as quiet.
+    """
+    args = ["git", "rev-parse"]
+    for marker, _ in OPERATION_MARKERS:
+        args += ["--git-path", marker]
+    code, out = run(args, cwd)
+    locations = out.splitlines()
+    if code != 0 or len(locations) != len(OPERATION_MARKERS):
+        return "unknown"
+    for location, (_, name) in zip(locations, OPERATION_MARKERS):
+        present = _probe(Path.exists, Path(cwd) / location)
+        if present is None:
+            return "unknown"
+        if present:
+            return name
+    return None
+
+
 def _dirty_paths(porcelain):
     """Paths from `git status --porcelain -z`, including untracked.
 
@@ -227,6 +264,7 @@ def git_facts(cwd):
             "status_ok": False,
             "detached_head": False,
             "unborn_branch": False,
+            "operation_in_progress": None,
             "dirty_paths": [],
         }
 
@@ -264,6 +302,7 @@ def git_facts(cwd):
         "status_ok": status_ok,
         "detached_head": detached,
         "unborn_branch": unborn,
+        "operation_in_progress": _operation_in_progress(cwd),
         "dirty_paths": dirty,
     }
 
@@ -544,6 +583,15 @@ def collect(cwd, handoff_doc, paths=None):
             "code": "unborn-branch",
             "detail": "The repository has no commit yet, so there is no branch "
                       "to build on.",
+        })
+    elif facts["operation_in_progress"]:
+        blockers.append({
+            "code": "operation-in-progress",
+            "detail": "A {} is stopped partway. The run's next commit would "
+                      "complete it, and a stopped merge would make that a "
+                      "merge commit. Finish or abort it first.".format(
+                          facts["operation_in_progress"]
+                      ),
         })
     elif facts["detached_head"]:
         blockers.append({
