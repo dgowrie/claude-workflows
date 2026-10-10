@@ -126,21 +126,26 @@ def _default_branch(cwd):
 
 
 def _dirty_paths(porcelain):
-    """Paths from `git status --porcelain`, including untracked.
+    """Paths from `git status --porcelain -z`, including untracked.
 
     Untracked files count as dirty. An unattended run must not bulldoze work
     whose origin it cannot establish, and untracked files are precisely the case
     where it has the least idea what it would be destroying.
+
+    Split on NUL rather than `str.splitlines`, which also breaks on U+0085 and
+    other characters git allows in a name. A name split that way leaves
+    fragments too short to keep, and the tree reads as clean.
     """
     paths = []
-    for line in porcelain.splitlines():
-        if len(line) < 4:
+    entries = iter(porcelain.split("\0"))
+    for entry in entries:
+        if len(entry) < 4:
             continue
-        path = line[3:]
-        # Renames arrive as "old -> new"; the destination is what exists now.
-        if " -> " in path:
-            path = path.split(" -> ", 1)[1]
-        paths.append(path.strip('"'))
+        # A rename or copy is followed by a second field naming its origin; the
+        # destination, in this entry, is what exists now.
+        if entry[0] in "RC":
+            next(entries, None)
+        paths.append(entry[3:])
     return paths
 
 
@@ -164,8 +169,18 @@ def git_facts(cwd):
     branch = branch.strip()
     # A failed `git status` prints nothing, which is indistinguishable from a
     # clean tree. Keeping the return code is what stops the dirty-tree gate
-    # from failing open on an unknown tree state.
-    status_code, porcelain = run(["git", "status", "--porcelain"], cwd)
+    # from failing open on an unknown tree state. The explicit flags override
+    # config that would hide untracked files or modified submodules, which
+    # empties the output the same way; `normal` rather than `all` because
+    # listing every file inside an untracked directory can be slow, and this
+    # call deliberately has no deadline.
+    status_code, porcelain = run(
+        [
+            "git", "status", "--porcelain", "-z",
+            "--untracked-files=normal", "--ignore-submodules=none",
+        ],
+        cwd,
+    )
     status_ok = status_code == 0
     default = _default_branch(cwd)
     dirty = _dirty_paths(porcelain)

@@ -167,6 +167,49 @@ class GitFacts(unittest.TestCase):
         self.assertFalse(facts["tree_clean"])
         self.assertIn("new.txt", facts["dirty_paths"])
 
+    def test_untracked_file_is_dirty_when_config_hides_untracked(self):
+        """`status.showUntrackedFiles=no` can come from user, repo, or system
+        config, none of which the script controls. Honouring it would empty the
+        status output and let the dirty-tree gate fail open."""
+        repo = make_repo()
+        git(repo, "config", "status.showUntrackedFiles", "no")
+        (repo / "stray.txt").write_text("hidden by config\n")
+        facts = preflight.git_facts(repo)
+        self.assertFalse(facts["tree_clean"])
+        self.assertIn("stray.txt", facts["dirty_paths"])
+
+    def test_dirty_submodule_is_dirty_when_config_ignores_it(self):
+        """`submodule.<name>.ignore` hides a modified submodule from status the
+        same way, and is just as outside the script's control."""
+        inner = make_repo()
+        repo = make_repo()
+        git(repo, "-c", "protocol.file.allow=always",
+            "submodule", "add", "-q", str(inner), "sub")
+        git(repo, "commit", "-q", "-m", "add submodule")
+        git(repo, "config", "submodule.sub.ignore", "all")
+        (repo / "sub" / "README.md").write_text("changed inside\n")
+        facts = preflight.git_facts(repo)
+        self.assertFalse(facts["tree_clean"])
+        self.assertIn("sub", facts["dirty_paths"])
+
+    def test_unicode_line_separator_in_a_name_is_still_dirty(self):
+        """`str.splitlines` also breaks on U+0085 and similar, which git does
+        not treat as line ends. With `core.quotePath=false` such a name reaches
+        the parser raw, splits into fragments too short to keep, and the tree
+        reads as clean."""
+        repo = make_repo()
+        git(repo, "config", "core.quotePath", "false")
+        (repo / "\u0085x").write_text("odd name\n")
+        facts = preflight.git_facts(repo)
+        self.assertFalse(facts["tree_clean"])
+        self.assertIn("\u0085x", facts["dirty_paths"])
+
+    def test_staged_rename_reports_the_new_path(self):
+        repo = make_repo()
+        git(repo, "mv", "README.md", "RENAMED.md")
+        facts = preflight.git_facts(repo)
+        self.assertEqual(facts["dirty_paths"], ["RENAMED.md"])
+
     def test_failed_status_reports_unknown_rather_than_clean(self):
         """A gate that fails open is worse than no gate. When `git status`
         fails its output is empty, which looks exactly like a clean tree; the
