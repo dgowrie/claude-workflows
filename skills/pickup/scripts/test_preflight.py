@@ -489,6 +489,26 @@ class Codeowners(unittest.TestCase):
         self.assertEqual(self.owners(rules, "apps/github/x.js"), [])
         self.assertEqual(self.owners(rules, "apps/other/x.js"), ["@octocat"])
 
+    def test_trailing_star_does_not_claim_nested_files(self):
+        """GitHub's own example: `docs/*` matches `docs/getting-started.md` but
+        not `docs/build-app/troubleshooting.md`. Treating the matched directory
+        `docs/build-app` as owning its contents hands nested docs to the wrong
+        team under last-match-wins."""
+        rules = "* @default\ndocs/* @docs\n"
+        self.assertEqual(self.owners(rules, "docs/getting-started.md"), ["@docs"])
+        self.assertEqual(
+            self.owners(rules, "docs/build-app/troubleshooting.md"), ["@default"]
+        )
+
+    def test_root_star_claims_only_root_files(self):
+        rules = "* @default\n/* @root\n"
+        self.assertEqual(self.owners(rules, "README.md"), ["@root"])
+        self.assertEqual(self.owners(rules, "src/x.py"), ["@default"])
+
+    def test_partial_wildcard_directory_still_claims_its_contents(self):
+        rules = "* @default\npackages/app-* @apps\n"
+        self.assertEqual(self.owners(rules, "packages/app-web/src/i.ts"), ["@apps"])
+
     def test_brackets_are_not_a_character_range(self):
         rules = "* @default\nfile[ab].md @range\n"
         self.assertEqual(self.owners(rules, "filea.md"), ["@default"])

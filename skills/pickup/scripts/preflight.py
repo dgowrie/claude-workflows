@@ -281,6 +281,11 @@ def _codeowners_matches(pattern, path):
     directories. Matching a directory claims everything beneath it, so every
     ancestor of `path` is a candidate as well as `path` itself.
 
+    Except after a final bare `*`: GitHub documents that `docs/*` matches
+    `docs/getting-started.md` but not `docs/build-app/troubleshooting.md`, so
+    there only `path` itself is a candidate. Plain gitignore differs here, and
+    GitHub is what decides who reviews.
+
     `[` is literal: GitHub documents that character ranges do not work, and
     letting `fnmatch` treat one as a range would claim paths GitHub does not.
     """
@@ -293,6 +298,8 @@ def _codeowners_matches(pattern, path):
     if not anchored:
         pattern_parts = ["**"] + pattern_parts
     path_parts = path.strip("/").split("/")
+    if pattern_parts[-1] == "*" and not directory_only:
+        return _segments_match(pattern_parts, path_parts)
     last = len(path_parts) - 1 if directory_only else len(path_parts)
     return any(
         _segments_match(pattern_parts, path_parts[:depth])
