@@ -134,6 +134,25 @@ def make_handoff_doc(name="handoff-thing.md"):
     return str(doc)
 
 
+SKIP_AS_ROOT = unittest.skipIf(
+    hasattr(os, "geteuid") and os.geteuid() == 0,
+    "root reads regardless of mode bits",
+)
+
+
+def locked_directory(test):
+    """A directory with mode 000, restored on cleanup so tempdir removal works.
+
+    `Path.is_file` and `is_dir` raise on EACCES rather than returning False, on
+    both 3.9 and 3.13, so anything beneath this directory is a crash probe.
+    """
+    locked = Path(tempfile.mkdtemp()) / "locked"
+    locked.mkdir()
+    locked.chmod(0o000)
+    test.addCleanup(locked.chmod, 0o755)
+    return locked
+
+
 class GitFacts(unittest.TestCase):
     def test_clean_repo_on_default_branch(self):
         repo = make_repo()
@@ -417,10 +436,7 @@ class Codeowners(unittest.TestCase):
         self.assertFalse(result["readable"])
         self.assertEqual(result["owners"], [])
 
-    @unittest.skipIf(
-        hasattr(os, "geteuid") and os.geteuid() == 0,
-        "root reads regardless of mode bits",
-    )
+    @SKIP_AS_ROOT
     def test_unreadable_file_does_not_raise(self):
         repo = make_repo()
         owners_file = repo / "CODEOWNERS"
@@ -432,6 +448,19 @@ class Codeowners(unittest.TestCase):
             owners_file.chmod(0o644)
         self.assertFalse(result["readable"])
         self.assertEqual(result["owners"], [])
+
+    @SKIP_AS_ROOT
+    def test_unsearchable_location_reports_unreadable_rather_than_raising(self):
+        """When a CODEOWNERS location cannot even be probed, whether a file
+        exists there is unknown, which is not the same as there being none."""
+        repo = make_repo()
+        github = repo / ".github"
+        github.mkdir()
+        (github / "CODEOWNERS").write_text("* @default-owner\n")
+        github.chmod(0o000)
+        self.addCleanup(github.chmod, 0o755)
+        result = preflight.codeowners_for(repo, ["skills/pickup/SKILL.md"])
+        self.assertFalse(result["readable"])
 
     def test_absent_file_counts_as_readable(self):
         """No CODEOWNERS is a known state, not a failure to read one."""
@@ -546,6 +575,21 @@ class Blockers(unittest.TestCase):
         codes = [b["code"] for b in result["blockers"]]
         self.assertIn("cwd-unreadable", codes)
         self.assertNotIn("not-a-git-repo", codes)
+
+    @SKIP_AS_ROOT
+    def test_handoff_doc_behind_a_locked_directory_is_unreadable(self):
+        repo = make_repo()
+        doc = str(locked_directory(self) / "handoff.md")
+        result = self.collect(repo, doc)
+        self.assertIn(
+            "handoff-doc-unreadable", [b["code"] for b in result["blockers"]]
+        )
+
+    @SKIP_AS_ROOT
+    def test_cwd_behind_a_locked_directory_is_unreadable(self):
+        cwd = locked_directory(self) / "repo"
+        result = self.collect(cwd, make_handoff_doc())
+        self.assertIn("cwd-unreadable", [b["code"] for b in result["blockers"]])
 
     def test_unknown_default_branch_blocks(self):
         """Phase 1 branches from the default branch. A guess there either
@@ -729,6 +773,20 @@ class Cli(unittest.TestCase):
         parsed = json.loads(output)
         self.assertEqual(parsed["codeowners"]["owners"], ["@skills-team"])
         self.assertTrue(parsed["codeowners"]["readable"])
+
+    def test_crash_exits_distinctly_and_still_emits_json(self):
+        """An uncaught exception exits 1 with empty stdout, which is the blocked
+        exit with nothing to read. The caller then hunts for blockers in an
+        empty string instead of learning the gate itself broke."""
+        with mock.patch.object(preflight, "collect", side_effect=RuntimeError("boom")):
+            code, output = self.run_main(["--handoff-doc", "x.md"])
+        self.assertEqual(code, preflight.CRASHED)
+        self.assertNotIn(code, (preflight.CLEAR, preflight.BLOCKED))
+        parsed = json.loads(output)
+        self.assertEqual(
+            [b["code"] for b in parsed["blockers"]], ["preflight-crashed"]
+        )
+        self.assertIn("boom", parsed["blockers"][0]["detail"])
 
     def test_missing_required_argument_is_a_usage_error(self):
         code, _ = self.run_main(["--cwd", "/tmp"])

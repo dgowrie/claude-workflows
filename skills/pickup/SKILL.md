@@ -37,7 +37,7 @@ For the mode gate, strictness runs `afk` < `semi` < `hitl`. The order is by how 
 
    That installed path is the one to use. A run happens in the project the handoff document describes, which is almost never this repo, so a repo-relative path resolves to nothing.
 2. Write the triage file immediately, carrying the preflight result and any blockers it reported. Every later step updates it in place, and every stop below updates it before stopping, so the run always leaves this artifact behind.
-3. On a non-zero exit, stop. On exit 1 print each blocker with its detail; on any other non-zero exit print the raw output, which covers the usage error and a crash alike. This holds in every mode, and `--force` does not reach it.
+3. On a non-zero exit, stop. On exit 1 (blocked) or 3 (the script crashed) print each blocker with its detail; on exit 2 (usage error) or any other code print the raw output. This holds in every mode, and `--force` does not reach it.
 4. Read the handoff document and every issue, PR, and file it references.
 5. Build the acceptance criteria table, fixing each criterion's verification method now, while the work still looks easy.
 6. Classify every open question against the taxonomies in `TRIAGE.md`. A hard blocker stops the run here, printed the same way as a preflight blocker.

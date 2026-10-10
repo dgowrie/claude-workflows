@@ -8,6 +8,10 @@ Prints one JSON object of facts on stdout and exits:
     0  clear    no mechanical blocker; the run may proceed to triage
     1  blocked  at least one blocker; `blockers` says which
     2  usage    the arguments were wrong; no facts were gathered
+    3  crashed  the script itself failed; `blockers` holds one
+                `preflight-crashed` entry and no other facts are reported
+
+`--help` is the one exit 0 that prints usage text rather than JSON.
 
 The point of this script is that `/pickup` runs unattended. A gate that depends
 on the model remembering to check is not a gate, so every precondition that can
@@ -57,7 +61,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-CLEAR, BLOCKED, USAGE_ERROR = 0, 1, 2
+CLEAR, BLOCKED, USAGE_ERROR, CRASHED = 0, 1, 2, 3
 
 # Conventional shell exit status for a timed-out command, reused here so a
 # caller can tell a hang apart from an ordinary failure.
@@ -105,6 +109,19 @@ def run(args, cwd, timeout=None):
 
 
 ORIGIN_PREFIX = "refs/remotes/origin/"
+
+
+def _probe(check, path):
+    """`check(path)`, or None when the path cannot be examined at all.
+
+    `Path.is_file` and `is_dir` raise on EACCES rather than returning False.
+    Uncaught, that exits 1 with empty stdout, which is the blocked exit with
+    nothing to read.
+    """
+    try:
+        return check(path)
+    except OSError:
+        return None
 
 
 def _default_branch(cwd):
@@ -269,7 +286,12 @@ def codeowners_for(repo_root, paths):
     root = Path(repo_root)
     location = None
     for candidate in CODEOWNERS_LOCATIONS:
-        if (root / candidate).is_file():
+        present = _probe(Path.is_file, root / candidate)
+        if present is None:
+            # Whether a file exists here is unknown, so a later location
+            # cannot be trusted to be the one GitHub would use.
+            return {"file": None, "owners": [], "readable": False}
+        if present:
             location = candidate
             break
     if location is None:
@@ -363,7 +385,7 @@ def collect(cwd, handoff_doc, paths=None):
     facts = git_facts(cwd)
     blockers = []
 
-    if not Path(cwd).is_dir():
+    if not _probe(Path.is_dir, Path(cwd)):
         # An unreachable directory fails the same git call as a real directory
         # outside any repo, so the causes have to be told apart here.
         blockers.append({
@@ -410,7 +432,7 @@ def collect(cwd, handoff_doc, paths=None):
         })
 
     doc = Path(handoff_doc)
-    doc_readable = doc.is_file() and os.access(str(doc), os.R_OK)
+    doc_readable = bool(_probe(Path.is_file, doc)) and os.access(str(doc), os.R_OK)
     if not doc_readable:
         blockers.append({
             "code": "handoff-doc-unreadable",
@@ -481,7 +503,21 @@ def main(argv=None):
         # distinction: --help is a successful request, not a usage error.
         return USAGE_ERROR if exit_signal.code else CLEAR
 
-    result = collect(args.cwd, args.handoff_doc, args.paths)
+    try:
+        result = collect(args.cwd, args.handoff_doc, args.paths)
+    except Exception as error:  # noqa: BLE001
+        # A traceback leaves the caller parsing an empty stdout. Keep the JSON
+        # contract and give the failure its own exit code, so "blocked" never
+        # has to mean "crashed".
+        print(json.dumps({
+            "blockers": [{
+                "code": "preflight-crashed",
+                "detail": "preflight.py raised {}: {}".format(
+                    type(error).__name__, error
+                ),
+            }],
+        }, indent=2, sort_keys=True))
+        return CRASHED
     print(json.dumps(result, indent=2, sort_keys=True))
     return BLOCKED if result["blockers"] else CLEAR
 
