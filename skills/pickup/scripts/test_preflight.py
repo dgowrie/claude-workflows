@@ -97,6 +97,21 @@ def make_repo(default_branch="main"):
     return path
 
 
+def add_remote(repo, upstream, origin_head=None):
+    """Wire `upstream` in as `origin` and fetch it.
+
+    `origin/HEAD` is then set explicitly, because whether `fetch` creates it
+    depends on the git version (newer git does, older git and Apple's do not).
+    `None` deletes it, which is the hand-wired-clone state on older git.
+    """
+    git(repo, "remote", "add", "origin", str(upstream))
+    git(repo, "fetch", "-q", "origin")
+    if origin_head is None:
+        git(repo, "remote", "set-head", "origin", "-d")
+    else:
+        git(repo, "remote", "set-head", "origin", origin_head)
+
+
 def make_unborn_repo():
     """An initialised repo with no commit yet, so HEAD points at nothing."""
     path = Path(tempfile.mkdtemp())
@@ -140,6 +155,40 @@ class GitFacts(unittest.TestCase):
         repo = make_repo(default_branch="master")
         facts = preflight.git_facts(repo)
         self.assertEqual(facts["default_branch"], "master")
+        self.assertTrue(facts["on_default_branch"])
+
+    def test_remote_default_is_used_when_origin_head_is_unset(self):
+        """`git remote add` plus a fetch never sets `origin/HEAD`, so this is the
+        ordinary state of a hand-wired clone, not an exotic one. Falling back to
+        the current branch there reports a feature branch as the default."""
+        upstream = make_repo()
+        repo = make_repo(default_branch="trunk")
+        add_remote(repo, upstream)
+        git(repo, "checkout", "-q", "-b", "feat/x")
+        facts = preflight.git_facts(repo)
+        self.assertEqual(facts["default_branch"], "main")
+        self.assertFalse(facts["on_default_branch"])
+
+    def test_unresolvable_default_with_a_remote_is_unknown(self):
+        upstream = make_repo(default_branch="develop")
+        repo = make_repo(default_branch="trunk")
+        add_remote(repo, upstream)
+        git(repo, "checkout", "-q", "-b", "feat/x")
+        facts = preflight.git_facts(repo)
+        self.assertIsNone(facts["default_branch"])
+        self.assertFalse(facts["on_default_branch"])
+
+    def test_default_branch_containing_a_slash_is_kept_whole(self):
+        upstream = make_repo(default_branch="release/x")
+        repo = make_repo(default_branch="trunk")
+        add_remote(repo, upstream, origin_head="release/x")
+        facts = preflight.git_facts(repo)
+        self.assertEqual(facts["default_branch"], "release/x")
+
+    def test_current_branch_is_default_only_without_a_remote(self):
+        repo = make_repo(default_branch="develop")
+        facts = preflight.git_facts(repo)
+        self.assertEqual(facts["default_branch"], "develop")
         self.assertTrue(facts["on_default_branch"])
 
     def test_modified_file_is_dirty(self):
@@ -497,6 +546,17 @@ class Blockers(unittest.TestCase):
         codes = [b["code"] for b in result["blockers"]]
         self.assertIn("cwd-unreadable", codes)
         self.assertNotIn("not-a-git-repo", codes)
+
+    def test_unknown_default_branch_blocks(self):
+        """Phase 1 branches from the default branch. A guess there either
+        builds on the wrong base or abandons the branch the handoff came from."""
+        upstream = make_repo(default_branch="develop")
+        repo = make_repo(default_branch="trunk")
+        add_remote(repo, upstream)
+        result = self.collect(repo, make_handoff_doc())
+        self.assertIn(
+            "default-branch-unknown", [b["code"] for b in result["blockers"]]
+        )
 
     def test_unauthenticated_gh_blocks(self):
         repo = make_repo()

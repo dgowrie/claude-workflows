@@ -27,9 +27,10 @@ Known bounds:
   negation or the full gitignore pattern grammar. An unmatched path contributes
   no owners rather than a wrong one, and an unreadable CODEOWNERS reports
   `readable: false` rather than an empty owner list.
-* The default branch is read from `origin/HEAD` when a remote is configured, and
-  otherwise inferred from whether `main` or `master` exists locally. A repo whose
-  default branch is neither, and which has no remote, reports its current branch.
+* The default branch is read from `origin/HEAD`, then from an `origin/main` or
+  `origin/master` ref, then from a local `main` or `master`. Only a repo with no
+  remote falls back to its current branch; a repo with a remote that resolves
+  none of these reports `default-branch-unknown` rather than a guess.
 * Resume detection matches the handoff document's basename against open PR
   bodies. Two handoff documents sharing a basename across a repo would collide;
   the lowest-numbered match wins, so the collision resolves to a stable answer
@@ -103,18 +104,35 @@ def run(args, cwd, timeout=None):
     return completed.returncode, completed.stdout
 
 
+ORIGIN_PREFIX = "refs/remotes/origin/"
+
+
 def _default_branch(cwd):
-    code, out = run(
-        ["git", "symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"], cwd
-    )
-    if code == 0 and out.strip():
-        return out.strip().rsplit("/", 1)[-1]
-    for candidate in ("main", "master"):
-        code, _ = run(
-            ["git", "show-ref", "--verify", "--quiet", "refs/heads/" + candidate], cwd
-        )
-        if code == 0:
-            return candidate
+    """The default branch, or None when it cannot be established.
+
+    Resolution runs from most to least authoritative: `origin/HEAD`, then an
+    `origin/main` or `origin/master` ref, then a local `main` or `master`. Only
+    a repo with no remote at all falls back to the current branch. With a
+    remote configured that fallback is a guess that reads as a fact: on a
+    feature branch it reports the feature branch as the default.
+    """
+    code, out = run(["git", "symbolic-ref", "--quiet", ORIGIN_PREFIX + "HEAD"], cwd)
+    ref = out.strip()
+    if code == 0 and ref.startswith(ORIGIN_PREFIX):
+        # Strip the prefix rather than splitting on "/": a default branch may
+        # itself contain one, as in `release/x`.
+        return ref[len(ORIGIN_PREFIX):]
+    for ref_prefix in (ORIGIN_PREFIX, "refs/heads/"):
+        for candidate in ("main", "master"):
+            code, _ = run(
+                ["git", "show-ref", "--verify", "--quiet", ref_prefix + candidate],
+                cwd,
+            )
+            if code == 0:
+                return candidate
+    code, remotes = run(["git", "remote"], cwd)
+    if code != 0 or remotes.strip():
+        return None
     code, current = run(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd)
     current = current.strip()
     # A detached or unborn HEAD prints the literal "HEAD", which is not a branch
@@ -375,6 +393,13 @@ def collect(cwd, handoff_doc, paths=None):
             "detail": "HEAD is detached. Committing here orphans the work, and "
                       "the literal branch name \"HEAD\" reads as an ordinary "
                       "feature branch.",
+        })
+    elif facts["default_branch"] is None:
+        blockers.append({
+            "code": "default-branch-unknown",
+            "detail": "The default branch could not be established, so there "
+                      "is no known base to branch from. `git remote set-head "
+                      "origin --auto` usually fixes this.",
         })
     elif not facts["tree_clean"]:
         blockers.append({
