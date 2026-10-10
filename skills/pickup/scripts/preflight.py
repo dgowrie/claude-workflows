@@ -60,6 +60,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from urllib.parse import urlparse
 
 CLEAR, BLOCKED, USAGE_ERROR, CRASHED = 0, 1, 2, 3
 
@@ -76,6 +77,8 @@ PR_LIST_LIMIT = 1000
 # take a long time on a large repo with a cold cache, and timing it out would
 # turn a benign state into a blocker.
 GH_TIMEOUT_SECONDS = 30
+
+DEFAULT_GH_HOST = "github.com"
 
 CODEOWNERS_LOCATIONS = (".github/CODEOWNERS", "CODEOWNERS", "docs/CODEOWNERS")
 
@@ -329,13 +332,42 @@ def codeowners_for(repo_root, paths):
     return {"file": str(root / location), "owners": owners, "readable": True}
 
 
+def _github_host(cwd):
+    """The host `gh` will talk to for this repo.
+
+    `GH_HOST` wins, as it does for `gh` itself; then the `origin` URL, in its
+    `https://host/...`, `ssh://user@host/...`, or scp-like `user@host:path`
+    form; then github.com.
+    """
+    if os.environ.get("GH_HOST"):
+        return os.environ["GH_HOST"]
+    code, url = run(["git", "remote", "get-url", "origin"], cwd)
+    url = url.strip()
+    if code != 0 or not url:
+        return DEFAULT_GH_HOST
+    if "://" in url:
+        return urlparse(url).hostname or DEFAULT_GH_HOST
+    if ":" in url:
+        return url.split(":", 1)[0].rsplit("@", 1)[-1] or DEFAULT_GH_HOST
+    return DEFAULT_GH_HOST
+
+
 def gh_auth_state(cwd):
     """One of "ok", "timeout", or "unauthenticated".
 
     A hung network call and a missing credential need different remedies, so
     reporting both as unauthenticated sends the reader after the wrong problem.
+
+    Scoped to the active account on the repo's host. Unscoped, `gh auth status`
+    exits 1 when any account on any host has a problem, so one stale login
+    elsewhere would block every run. A `gh` too old to know `--active` exits 1
+    here too, which blocks rather than proceeds.
     """
-    code, _ = run(["gh", "auth", "status"], cwd, timeout=GH_TIMEOUT_SECONDS)
+    code, _ = run(
+        ["gh", "auth", "status", "--hostname", _github_host(cwd), "--active"],
+        cwd,
+        timeout=GH_TIMEOUT_SECONDS,
+    )
     if code == TIMEOUT_EXIT:
         return "timeout"
     return "ok" if code == 0 else "unauthenticated"

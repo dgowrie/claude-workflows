@@ -469,6 +469,60 @@ class Codeowners(unittest.TestCase):
         self.assertTrue(result["readable"])
 
 
+class GhAuthState(unittest.TestCase):
+    def auth_args(self, repo, environment=None):
+        """The `gh auth status` argv, with git real and gh stubbed."""
+        real_run = preflight.run
+        calls = []
+
+        def fake_run(args, cwd, timeout=None):
+            calls.append(args)
+            if args[0] == "gh":
+                return 0, ""
+            return real_run(args, cwd, timeout)
+
+        with mock.patch.dict(os.environ, environment or {}), \
+             mock.patch.object(preflight, "run", side_effect=fake_run):
+            preflight.gh_auth_state(repo)
+        return next(call for call in calls if call[:3] == ["gh", "auth", "status"])
+
+    def test_scoped_to_the_remote_host_and_active_account(self):
+        """Unscoped, `gh auth status` exits 1 when any account on any host has
+        a problem, so a stale second login blocks every run. Only the account
+        the run will actually use matters."""
+        repo = make_repo()
+        git(repo, "remote", "add", "origin", "git@ghe.example.com:org/repo.git")
+        args = self.auth_args(repo)
+        self.assertIn("--active", args)
+        self.assertEqual(args[args.index("--hostname") + 1], "ghe.example.com")
+
+    def test_https_remote_host_is_parsed(self):
+        repo = make_repo()
+        git(repo, "remote", "add", "origin", "https://github.com/org/repo.git")
+        args = self.auth_args(repo)
+        self.assertEqual(args[args.index("--hostname") + 1], "github.com")
+
+    def test_gh_host_overrides_the_remote(self):
+        repo = make_repo()
+        git(repo, "remote", "add", "origin", "https://github.com/org/repo.git")
+        args = self.auth_args(repo, {"GH_HOST": "ghe.example.com"})
+        self.assertEqual(args[args.index("--hostname") + 1], "ghe.example.com")
+
+    def test_no_remote_defaults_to_github_com(self):
+        repo = make_repo()
+        with mock.patch.dict(os.environ):
+            os.environ.pop("GH_HOST", None)
+            args = self.auth_args(repo)
+        self.assertEqual(args[args.index("--hostname") + 1], "github.com")
+
+    def test_exit_codes_map_to_states(self):
+        for code, state in ((0, "ok"), (1, "unauthenticated"),
+                            (preflight.TIMEOUT_EXIT, "timeout")):
+            with self.subTest(code=code), \
+                 mock.patch.object(preflight, "run", return_value=(code, "")):
+                self.assertEqual(preflight.gh_auth_state("."), state)
+
+
 class GhOpenPrs(unittest.TestCase):
     """`None` means the lookup failed; `[]` means the repo genuinely has no open
     PRs. Collapsing them is a silent zero with an outward-facing consequence: a
