@@ -58,7 +58,7 @@ Phase 1 is done when the branch is a feature branch and its name has been printe
 
 1. Work criterion by criterion, red first: write the failing test, confirm it fails, then implement to green.
 2. Keep commits discrete, mapping to logical units rather than to time spent.
-3. Open a **draft** pull request as soon as the first commit exists, citing the handoff document's filename in the body. The description is this run's canonical status surface, and it is also how a later run finds this one; opening it early is what makes a resume possible after the session dies.
+3. Open a **draft** pull request as soon as the first commit exists. Its body's first line is exactly ``Picked up from `<handoff-basename>`.``, and every later update keeps that line intact: preflight matches it literally, so a reworded citation makes the run unfindable. The description is this run's canonical status surface, and it is also how a later run finds this one; opening it early is what makes a resume possible after the session dies.
 4. Update the description at every phase boundary from here on.
 5. For each judgment call, build the reversible option, add its Decisions Log row, and leave a `:notebook:` inline comment where the decision shows up in the diff.
 

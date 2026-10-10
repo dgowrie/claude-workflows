@@ -37,9 +37,10 @@ Known bounds:
   `origin/master` ref, then from a local `main` or `master`. Only a repo with no
   remote falls back to its current branch; a repo with a remote that resolves
   none of these reports `default-branch-unknown` rather than a guess.
-* Resume detection matches the handoff document's basename against open PR
-  bodies. Two handoff documents sharing a basename across a repo would collide;
-  the lowest-numbered match wins, so the collision resolves to a stable answer
+* Resume detection looks for the exact citation line `/pickup` writes, naming
+  the handoff document's basename, in the viewer's own open PR bodies. Two of
+  the viewer's handoff documents sharing a basename would collide; the
+  lowest-numbered match wins, so the collision resolves to a stable answer
   rather than an arbitrary one.
 * The open-PR listing reads one window of `PR_LIST_LIMIT` entries, newest
   first. A repo busy enough to fill it reports `pr-lookup-truncated` rather than
@@ -81,6 +82,10 @@ PR_LIST_LIMIT = 1000
 GH_TIMEOUT_SECONDS = 30
 
 DEFAULT_GH_HOST = "github.com"
+
+# The line `/pickup` writes into a PR body, and the only form resume accepts.
+# A bare substring test let `old-handoff.md` claim a run cited as `handoff.md`.
+RUN_CITATION = "Picked up from `{}`"
 
 CODEOWNERS_LOCATIONS = (".github/CODEOWNERS", "CODEOWNERS", "docs/CODEOWNERS")
 
@@ -404,7 +409,7 @@ def gh_open_prs(cwd):
         [
             "gh", "pr", "list",
             "--state", "open",
-            "--json", "number,url,headRefName,body",
+            "--json", "number,url,headRefName,body,author,isCrossRepository",
             "--limit", str(PR_LIST_LIMIT),
         ],
         cwd,
@@ -419,17 +424,46 @@ def gh_open_prs(cwd):
     return parsed if isinstance(parsed, list) else None
 
 
-def find_run_pr(prs, handoff_doc):
+def gh_viewer(cwd):
+    """The authenticated login on the repo's host, or None when unknown."""
+    code, out = run(
+        ["gh", "api", "user", "--hostname", _github_host(cwd), "--jq", ".login"],
+        cwd,
+        timeout=GH_TIMEOUT_SECONDS,
+    )
+    login = out.strip()
+    return login if code == 0 and login else None
+
+
+def find_run_pr(prs, handoff_doc, viewer):
     """The open PR belonging to this run, or None.
 
     Keyed on the handoff document a PR body cites rather than on the branch name,
-    so a run resumes even when the branch was renamed between sessions.
+    so a run resumes even when the branch was renamed between sessions. Only the
+    viewer's own PRs qualify: the mandate forbids touching anyone else's, and a
+    colleague's PR citing the same filename is not this run.
     """
-    needle = os.path.basename(handoff_doc)
-    matches = [pr for pr in prs if needle in (pr.get("body") or "")]
+    citation = RUN_CITATION.format(os.path.basename(handoff_doc))
+    matches = [
+        pr for pr in prs
+        if citation in (pr.get("body") or "")
+        and (pr.get("author") or {}).get("login") == viewer
+    ]
     if not matches:
         return None
     return sorted(matches, key=lambda pr: pr.get("number", 0))[0]
+
+
+def find_branch_pr(prs, branch):
+    """The open same-repo PR whose head is `branch`, or None.
+
+    Fork PRs are excluded: they routinely reuse names like `patch-1`, and the
+    run never pushes to a fork.
+    """
+    for pr in sorted(prs, key=lambda pr: pr.get("number", 0)):
+        if pr.get("headRefName") == branch and not pr.get("isCrossRepository"):
+            return pr
+    return None
 
 
 def collect(cwd, handoff_doc, paths=None):
@@ -521,7 +555,33 @@ def collect(cwd, handoff_doc, paths=None):
                       "requests, so an existing run PR cannot be ruled out. "
                       "Proceeding would risk opening a duplicate.",
         })
-    existing_pr = find_run_pr(open_prs, handoff_doc) if open_prs else None
+    viewer = gh_viewer(cwd) if authenticated and open_prs is not None else None
+    if authenticated and open_prs is not None and viewer is None:
+        blockers.append({
+            "code": "gh-viewer-unknown",
+            "detail": "Could not read the authenticated login, so this run's "
+                      "own PR cannot be told apart from anyone else's.",
+        })
+    existing_pr = (
+        find_run_pr(open_prs, handoff_doc, viewer) if open_prs and viewer else None
+    )
+    branch = facts["current_branch"]
+    current_branch_pr = (
+        find_branch_pr(open_prs, branch)
+        if open_prs and branch and not facts["on_default_branch"]
+        and not facts["detached_head"]
+        else None
+    )
+    if current_branch_pr and (
+        not existing_pr or current_branch_pr["number"] != existing_pr["number"]
+    ):
+        blockers.append({
+            "code": "branch-has-other-pr",
+            "detail": "{} already carries PR #{}, which is not this run's. "
+                      "Keeping the branch would push onto it.".format(
+                          branch, current_branch_pr["number"]
+                      ),
+        })
 
     owners = (
         codeowners_for(facts["repo_root"], paths)
@@ -534,6 +594,7 @@ def collect(cwd, handoff_doc, paths=None):
         "handoff_doc": {"path": str(handoff_doc), "readable": doc_readable},
         "gh_auth_state": auth_state,
         "existing_pr": existing_pr,
+        "current_branch_pr": current_branch_pr,
         "codeowners": owners,
         "blockers": blockers,
     })

@@ -61,6 +61,8 @@ def tearDownModule():
     _isolated_environment.stop()
 
 
+VIEWER = "me"
+
 GIT_IDENTITY = [
     "-c", "user.name=Test",
     "-c", "user.email=test@example.com",
@@ -601,38 +603,79 @@ class GhOpenPrs(unittest.TestCase):
             self.assertIsNone(preflight.gh_open_prs("."))
 
 
+def make_pr(number, body=None, login=VIEWER, head="feat/other", fork=False):
+    return {
+        "number": number,
+        "body": body,
+        "author": {"login": login},
+        "headRefName": head,
+        "isCrossRepository": fork,
+    }
+
+
+def citing(handoff_name):
+    return "Picked up from `{}`.".format(handoff_name)
+
+
 class FindRunPr(unittest.TestCase):
     """Resume detection. Keyed on the handoff document a PR body cites, not on
     the branch name, so a run resumes even from a differently named branch."""
 
     HANDOFF = "/tmp/scratch/handoff-featurecard-layout.md"
+    NAME = "handoff-featurecard-layout.md"
+
+    def find(self, prs):
+        return preflight.find_run_pr(prs, self.HANDOFF, VIEWER)
 
     def test_no_open_prs(self):
-        self.assertIsNone(preflight.find_run_pr([], self.HANDOFF))
+        self.assertIsNone(self.find([]))
 
     def test_body_citing_the_handoff_matches(self):
-        prs = [{"number": 7, "body": "Picked up from handoff-featurecard-layout.md"}]
-        self.assertEqual(preflight.find_run_pr(prs, self.HANDOFF)["number"], 7)
+        self.assertEqual(self.find([make_pr(7, citing(self.NAME))])["number"], 7)
 
     def test_unrelated_prs_do_not_match(self):
-        prs = [
-            {"number": 4, "body": "unrelated work"},
-            {"number": 5, "body": "handoff-other-thing.md"},
-        ]
-        self.assertIsNone(preflight.find_run_pr(prs, self.HANDOFF))
+        prs = [make_pr(4, "unrelated work"), make_pr(5, citing("handoff-other.md"))]
+        self.assertIsNone(self.find(prs))
+
+    def test_a_name_containing_the_basename_does_not_match(self):
+        """A substring test lets `old-handoff-featurecard-layout.md` claim the
+        run, and lowest-number-wins then prefers it over the real PR."""
+        prs = [make_pr(5, citing("old-" + self.NAME)), make_pr(9, citing(self.NAME))]
+        self.assertEqual(self.find(prs)["number"], 9)
+
+    def test_a_bare_mention_is_not_a_citation(self):
+        self.assertIsNone(self.find([make_pr(5, "see " + self.NAME)]))
+
+    def test_another_authors_pr_is_never_adopted(self):
+        """The mandate forbids touching any pull request but the run's own. A
+        colleague's PR that happens to cite the same name is not one."""
+        self.assertIsNone(self.find([make_pr(5, citing(self.NAME), login="someone")]))
 
     def test_lowest_number_wins_when_several_match(self):
         """Two PRs citing one handoff means an earlier run was abandoned rather
         than resumed. The older one is the run to rejoin."""
-        prs = [
-            {"number": 9, "body": "handoff-featurecard-layout.md"},
-            {"number": 3, "body": "handoff-featurecard-layout.md"},
-        ]
-        self.assertEqual(preflight.find_run_pr(prs, self.HANDOFF)["number"], 3)
+        prs = [make_pr(9, citing(self.NAME)), make_pr(3, citing(self.NAME))]
+        self.assertEqual(self.find(prs)["number"], 3)
 
     def test_missing_body_is_tolerated(self):
-        prs = [{"number": 2}, {"number": 3, "body": None}]
-        self.assertIsNone(preflight.find_run_pr(prs, self.HANDOFF))
+        prs = [{"number": 2}, make_pr(3, None)]
+        self.assertIsNone(self.find(prs))
+
+
+class FindBranchPr(unittest.TestCase):
+    def test_same_repo_pr_on_the_branch_is_found(self):
+        prs = [make_pr(4, head="feat/thing")]
+        self.assertEqual(preflight.find_branch_pr(prs, "feat/thing")["number"], 4)
+
+    def test_fork_pr_sharing_the_branch_name_is_ignored(self):
+        """Fork heads routinely reuse names like `patch-1` or `main`; only a
+        branch in this repository is the one the run would push to."""
+        prs = [make_pr(4, head="feat/thing", fork=True)]
+        self.assertIsNone(preflight.find_branch_pr(prs, "feat/thing"))
+
+    def test_no_pr_on_the_branch(self):
+        prs = [make_pr(4, head="feat/other")]
+        self.assertIsNone(preflight.find_branch_pr(prs, "feat/thing"))
 
 
 class Blockers(unittest.TestCase):
@@ -642,7 +685,8 @@ class Blockers(unittest.TestCase):
 
     def collect(self, repo, handoff, prs=None, authed="ok"):
         with mock.patch.object(preflight, "gh_open_prs", return_value=prs or []), \
-             mock.patch.object(preflight, "gh_auth_state", return_value=authed):
+             mock.patch.object(preflight, "gh_auth_state", return_value=authed), \
+             mock.patch.object(preflight, "gh_viewer", return_value=VIEWER):
             return preflight.collect(repo, handoff)
 
     def test_clean_run_has_no_blockers(self):
@@ -694,6 +738,35 @@ class Blockers(unittest.TestCase):
         result = self.collect(cwd, make_handoff_doc())
         self.assertIn("cwd-unreadable", [b["code"] for b in result["blockers"]])
 
+    def test_feature_branch_with_an_unrelated_pr_blocks(self):
+        """"On a feature branch already, keep it" would push this run's commits
+        onto whatever PR that branch already carries."""
+        repo = make_repo()
+        git(repo, "checkout", "-q", "-b", "feat/thing")
+        prs = [make_pr(4, "someone else's work", head="feat/thing")]
+        result = self.collect(repo, make_handoff_doc(), prs=prs)
+        self.assertIn("branch-has-other-pr", [b["code"] for b in result["blockers"]])
+        self.assertEqual(result["current_branch_pr"]["number"], 4)
+
+    def test_feature_branch_carrying_the_run_pr_does_not_block(self):
+        repo = make_repo()
+        git(repo, "checkout", "-q", "-b", "feat/thing")
+        doc = make_handoff_doc()
+        prs = [make_pr(4, citing(os.path.basename(doc)), head="feat/thing")]
+        result = self.collect(repo, doc, prs=prs)
+        self.assertEqual(result["blockers"], [])
+        self.assertEqual(result["existing_pr"]["number"], 4)
+
+    def test_unknown_viewer_blocks(self):
+        """Without the authenticated login there is no telling the run's own
+        PR from anyone else's, so a resume cannot be ruled out."""
+        repo = make_repo()
+        with mock.patch.object(preflight, "gh_open_prs", return_value=[]), \
+             mock.patch.object(preflight, "gh_auth_state", return_value="ok"), \
+             mock.patch.object(preflight, "gh_viewer", return_value=None):
+            result = preflight.collect(repo, make_handoff_doc())
+        self.assertIn("gh-viewer-unknown", [b["code"] for b in result["blockers"]])
+
     def test_unknown_default_branch_blocks(self):
         """Phase 1 branches from the default branch. A guess there either
         builds on the wrong base or abandons the branch the handoff came from."""
@@ -731,16 +804,18 @@ class Resume(unittest.TestCase):
     def test_existing_pr_is_surfaced(self):
         repo = make_repo()
         doc = make_handoff_doc()
-        prs = [{"number": 11, "body": "handoff-thing.md", "url": "u", "headRefName": "feat/thing"}]
+        prs = [make_pr(11, citing("handoff-thing.md"), head="feat/thing")]
         with mock.patch.object(preflight, "gh_open_prs", return_value=prs), \
-             mock.patch.object(preflight, "gh_auth_state", return_value="ok"):
+             mock.patch.object(preflight, "gh_auth_state", return_value="ok"), \
+             mock.patch.object(preflight, "gh_viewer", return_value=VIEWER):
             result = preflight.collect(repo, doc)
         self.assertEqual(result["existing_pr"]["number"], 11)
 
     def test_absent_pr_is_null(self):
         repo = make_repo()
         with mock.patch.object(preflight, "gh_open_prs", return_value=[]), \
-             mock.patch.object(preflight, "gh_auth_state", return_value="ok"):
+             mock.patch.object(preflight, "gh_auth_state", return_value="ok"), \
+             mock.patch.object(preflight, "gh_viewer", return_value=VIEWER):
             result = preflight.collect(repo, make_handoff_doc())
         self.assertIsNone(result["existing_pr"])
 
@@ -755,7 +830,8 @@ class Resume(unittest.TestCase):
 
         with mock.patch.object(preflight, "run", side_effect=fake_run), \
              mock.patch.object(preflight, "gh_open_prs", return_value=[]), \
-             mock.patch.object(preflight, "gh_auth_state", return_value="ok"):
+             mock.patch.object(preflight, "gh_auth_state", return_value="ok"), \
+             mock.patch.object(preflight, "gh_viewer", return_value=VIEWER):
             result = preflight.collect(repo, make_handoff_doc())
         self.assertIn("git-status-failed", [b["code"] for b in result["blockers"]])
 
@@ -766,7 +842,8 @@ class Resume(unittest.TestCase):
         repo = make_repo()
         page = [{"number": n, "body": ""} for n in range(preflight.PR_LIST_LIMIT)]
         with mock.patch.object(preflight, "gh_open_prs", return_value=page), \
-             mock.patch.object(preflight, "gh_auth_state", return_value="ok"):
+             mock.patch.object(preflight, "gh_auth_state", return_value="ok"), \
+             mock.patch.object(preflight, "gh_viewer", return_value=VIEWER):
             result = preflight.collect(repo, make_handoff_doc())
         self.assertIn("pr-lookup-truncated", [b["code"] for b in result["blockers"]])
 
@@ -774,7 +851,8 @@ class Resume(unittest.TestCase):
         repo = make_repo()
         page = [{"number": 1, "body": ""}]
         with mock.patch.object(preflight, "gh_open_prs", return_value=page), \
-             mock.patch.object(preflight, "gh_auth_state", return_value="ok"):
+             mock.patch.object(preflight, "gh_auth_state", return_value="ok"), \
+             mock.patch.object(preflight, "gh_viewer", return_value=VIEWER):
             result = preflight.collect(repo, make_handoff_doc())
         self.assertNotIn(
             "pr-lookup-truncated", [b["code"] for b in result["blockers"]]
@@ -795,7 +873,8 @@ class Resume(unittest.TestCase):
         already has one, unattended and outward-facing."""
         repo = make_repo()
         with mock.patch.object(preflight, "gh_open_prs", return_value=None), \
-             mock.patch.object(preflight, "gh_auth_state", return_value="ok"):
+             mock.patch.object(preflight, "gh_auth_state", return_value="ok"), \
+             mock.patch.object(preflight, "gh_viewer", return_value=VIEWER):
             result = preflight.collect(repo, make_handoff_doc())
         self.assertIn("pr-lookup-failed", [b["code"] for b in result["blockers"]])
         self.assertIsNone(result["existing_pr"])
@@ -803,7 +882,8 @@ class Resume(unittest.TestCase):
     def test_genuinely_empty_lookup_does_not_block(self):
         repo = make_repo()
         with mock.patch.object(preflight, "gh_open_prs", return_value=[]), \
-             mock.patch.object(preflight, "gh_auth_state", return_value="ok"):
+             mock.patch.object(preflight, "gh_auth_state", return_value="ok"), \
+             mock.patch.object(preflight, "gh_viewer", return_value=VIEWER):
             result = preflight.collect(repo, make_handoff_doc())
         self.assertNotIn("pr-lookup-failed", [b["code"] for b in result["blockers"]])
 
@@ -833,6 +913,7 @@ class Cli(unittest.TestCase):
         out = []
         with mock.patch.object(preflight, "gh_open_prs", return_value=prs or []), \
              mock.patch.object(preflight, "gh_auth_state", return_value=authed), \
+             mock.patch.object(preflight, "gh_viewer", return_value=VIEWER), \
              mock.patch("builtins.print", side_effect=lambda *a, **k: out.append(a[0] if a else "")):
             code = preflight.main(argv)
         return code, "\n".join(str(line) for line in out)
