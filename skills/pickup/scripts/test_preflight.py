@@ -14,6 +14,7 @@ import importlib.util
 import io
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -32,6 +33,7 @@ def load():
 
 
 preflight = load()
+REAL_RUN = preflight.run
 
 _isolated_environment = None
 
@@ -153,6 +155,28 @@ def locked_directory(test):
     locked.chmod(0o000)
     test.addCleanup(locked.chmod, 0o755)
     return locked
+
+
+class Run(unittest.TestCase):
+    """`run` never raises: a traceback would leave a caller that parses stdout
+    as JSON with nothing to parse."""
+
+    def test_returns_code_and_unstripped_stdout(self):
+        code, out = preflight.run([sys.executable, "-c", "print(' x')"], ".")
+        self.assertEqual((code, out), (0, " x\n"))
+
+    def test_timeout_maps_to_the_timeout_exit(self):
+        code, out = preflight.run(
+            [sys.executable, "-c", "import time; time.sleep(5)"], ".", timeout=0.2
+        )
+        self.assertEqual((code, out), (preflight.TIMEOUT_EXIT, ""))
+
+    def test_missing_executable_maps_to_failure(self):
+        self.assertEqual(preflight.run(["definitely-not-a-command-xyz"], "."), (1, ""))
+
+    def test_missing_cwd_maps_to_failure(self):
+        missing = Path(tempfile.mkdtemp()) / "gone"
+        self.assertEqual(preflight.run(["git", "status"], missing), (1, ""))
 
 
 class GitFacts(unittest.TestCase):
@@ -791,13 +815,71 @@ class Blockers(unittest.TestCase):
         self.assertNotIn("on-default-branch", [b["code"] for b in result["blockers"]])
         self.assertTrue(result["on_default_branch"])
 
-    def test_every_blocker_carries_a_detail(self):
-        repo = make_repo()
-        (repo / "stray.txt").write_text("x\n")
-        result = self.collect(repo, str(repo / "nope.md"), authed="unauthenticated")
-        self.assertTrue(result["blockers"])
-        for blocker in result["blockers"]:
-            self.assertTrue(blocker.get("detail"), blocker)
+    def blocker_scenarios(self):
+        """One state per blocker code, each producing that code."""
+        def repo_with(*steps):
+            repo = make_repo()
+            for step in steps:
+                step(repo)
+            return repo
+
+        def failing_status(args, cwd, timeout=None):
+            if "status" in args:
+                return 1, ""
+            return REAL_RUN(args, cwd, timeout)
+
+        on_feature = lambda repo: git(repo, "checkout", "-q", "-b", "feat/thing")
+        doc = make_handoff_doc()
+        upstream = make_repo(default_branch="develop")
+        yield "cwd-unreadable", Path(tempfile.mkdtemp()) / "gone", doc, {}
+        yield "not-a-git-repo", Path(tempfile.mkdtemp()), doc, {}
+        yield "git-status-failed", repo_with(), doc, {"run": failing_status}
+        yield "unborn-branch", make_unborn_repo(), doc, {}
+        yield "detached-head", repo_with(
+            lambda repo: git(repo, "checkout", "-q", "--detach")
+        ), doc, {}
+        yield "default-branch-unknown", repo_with(
+            lambda repo: git(repo, "branch", "-q", "-m", "trunk"),
+            lambda repo: add_remote(repo, upstream),
+        ), doc, {}
+        yield "dirty-tree", repo_with(
+            lambda repo: (repo / "stray.txt").write_text("x\n")
+        ), doc, {}
+        yield "handoff-doc-unreadable", repo_with(), "/nonexistent/h.md", {}
+        yield "gh-timeout", repo_with(), doc, {"authed": "timeout"}
+        yield "gh-unauthenticated", repo_with(), doc, {"authed": "unauthenticated"}
+        yield "pr-lookup-truncated", repo_with(), doc, {
+            "prs": [make_pr(n) for n in range(preflight.PR_LIST_LIMIT)]
+        }
+        yield "pr-lookup-failed", repo_with(), doc, {"prs": None}
+        yield "gh-viewer-unknown", repo_with(), doc, {"viewer": None}
+        yield "branch-has-other-pr", repo_with(on_feature), doc, {
+            "prs": [make_pr(4, head="feat/thing")]
+        }
+
+    def test_every_blocker_code_is_produced_and_carries_a_detail(self):
+        """A blocker without a detail tells the reader that something is wrong
+        but not what. Scenarios are checked against every code in the source,
+        so a new blocker cannot ship without one."""
+        covered = set()
+        for code, cwd, doc, options in self.blocker_scenarios():
+            with self.subTest(code=code), \
+                 mock.patch.object(preflight, "run",
+                                   side_effect=options.get("run", REAL_RUN)), \
+                 mock.patch.object(preflight, "gh_open_prs",
+                                   return_value=options.get("prs", [])), \
+                 mock.patch.object(preflight, "gh_auth_state",
+                                   return_value=options.get("authed", "ok")), \
+                 mock.patch.object(preflight, "gh_viewer",
+                                   return_value=options.get("viewer", VIEWER)):
+                result = preflight.collect(cwd, doc)
+                blockers = {b["code"]: b for b in result["blockers"]}
+                self.assertIn(code, blockers)
+                self.assertTrue(blockers[code].get("detail"))
+                covered.add(code)
+        emitted = set(re.findall(r'"code": "([a-z-]+)"', SCRIPT.read_text()))
+        # The crash blocker is emitted by main rather than collect; Cli covers it.
+        self.assertEqual(covered, emitted - {"preflight-crashed"})
 
 
 class Resume(unittest.TestCase):
