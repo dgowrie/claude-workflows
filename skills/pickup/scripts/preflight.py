@@ -122,6 +122,7 @@ def run(args, cwd, timeout=None):
 
 
 ORIGIN_PREFIX = "refs/remotes/origin/"
+BRANCH_PREFIX = "refs/heads/"
 
 
 def _probe(check, path):
@@ -137,7 +138,22 @@ def _probe(check, path):
         return None
 
 
-def _default_branch(cwd):
+def _current_branch(cwd):
+    """The checked-out branch name, or None when HEAD is detached.
+
+    Read from the full ref rather than `rev-parse --abbrev-ref HEAD`, which
+    prints `heads/main` when a tag is also called `main`: that no longer
+    equals the default branch, so a run on main would read as on a feature
+    branch and keep committing to it. An unborn branch still has a name here.
+    """
+    code, out = run(["git", "symbolic-ref", "--quiet", "HEAD"], cwd)
+    ref = out.strip()
+    if code == 0 and ref.startswith(BRANCH_PREFIX):
+        return ref[len(BRANCH_PREFIX):]
+    return None
+
+
+def _default_branch(cwd, current_branch, unborn):
     """The default branch, or None when it cannot be established.
 
     Resolution runs from most to least authoritative: `origin/HEAD`, then an
@@ -163,14 +179,9 @@ def _default_branch(cwd):
     code, remotes = run(["git", "remote"], cwd)
     if code != 0 or remotes.strip():
         return None
-    code, current = run(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd)
-    current = current.strip()
-    # A detached or unborn HEAD prints the literal "HEAD", which is not a branch
-    # name. Returning it would make `on_default_branch` compare a string to
-    # itself and come out true.
-    if code != 0 or not current or current == "HEAD":
-        return None
-    return current
+    # An unborn branch has a name but nothing on it, so it is no base to branch
+    # from; reporting it as the default would make it trivially "on" default.
+    return None if unborn else current_branch
 
 
 def _dirty_paths(porcelain):
@@ -213,8 +224,7 @@ def git_facts(cwd):
             "dirty_paths": [],
         }
 
-    _, branch = run(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd)
-    branch = branch.strip()
+    branch = _current_branch(cwd)
     # A failed `git status` prints nothing, which is indistinguishable from a
     # clean tree. Keeping the return code is what stops the dirty-tree gate
     # from failing open on an unknown tree state. The explicit flags override
@@ -230,20 +240,18 @@ def git_facts(cwd):
         cwd,
     )
     status_ok = status_code == 0
-    default = _default_branch(cwd)
     dirty = _dirty_paths(porcelain)
 
-    # Both states print "HEAD" from `rev-parse --abbrev-ref`, so neither is
-    # visible in the branch name alone. `symbolic-ref` fails only when HEAD is
-    # detached; `rev-parse --verify HEAD` fails only before the first commit.
-    symbolic_code, _ = run(["git", "symbolic-ref", "--quiet", "HEAD"], cwd)
+    # `symbolic-ref` fails only when HEAD is detached, leaving no branch name;
+    # `rev-parse --verify HEAD` fails only before the first commit.
     verify_code, _ = run(["git", "rev-parse", "--verify", "--quiet", "HEAD"], cwd)
     unborn = verify_code != 0
-    detached = symbolic_code != 0 and not unborn
+    detached = branch is None and not unborn
+    default = _default_branch(cwd, branch, unborn)
 
     return {
         "repo_root": root,
-        "current_branch": branch or None,
+        "current_branch": branch,
         "default_branch": default,
         "on_default_branch": bool(default) and branch == default,
         "tree_clean": status_ok and not dirty,
@@ -534,9 +542,8 @@ def collect(cwd, handoff_doc, paths=None):
     elif facts["detached_head"]:
         blockers.append({
             "code": "detached-head",
-            "detail": "HEAD is detached. Committing here orphans the work, and "
-                      "the literal branch name \"HEAD\" reads as an ordinary "
-                      "feature branch.",
+            "detail": "HEAD is detached, so there is no branch to keep. "
+                      "Committing here orphans the work.",
         })
     elif facts["default_branch"] is None:
         blockers.append({

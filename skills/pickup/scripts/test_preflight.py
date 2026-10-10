@@ -199,6 +199,29 @@ class GitFacts(unittest.TestCase):
         self.assertEqual(facts["current_branch"], "feat/thing")
         self.assertFalse(facts["on_default_branch"])
 
+    def test_tag_sharing_the_branch_name_does_not_disguise_the_branch(self):
+        """`rev-parse --abbrev-ref HEAD` disambiguates to `heads/main` when a
+        tag is also called `main`. That no longer equals the default branch,
+        so a run sitting on the default branch reads as on a feature branch
+        and keeps it, committing straight onto main."""
+        repo = make_repo()
+        git(repo, "tag", "main")
+        facts = preflight.git_facts(repo)
+        self.assertEqual(facts["current_branch"], "main")
+        self.assertTrue(facts["on_default_branch"])
+
+    def test_tag_sharing_a_branch_name_without_a_remote(self):
+        repo = make_repo(default_branch="develop")
+        git(repo, "tag", "develop")
+        facts = preflight.git_facts(repo)
+        self.assertEqual(facts["default_branch"], "develop")
+        self.assertTrue(facts["on_default_branch"])
+
+    def test_detached_head_has_no_current_branch(self):
+        repo = make_repo()
+        git(repo, "checkout", "-q", "--detach")
+        self.assertIsNone(preflight.git_facts(repo)["current_branch"])
+
     def test_master_repo_detected_as_default(self):
         repo = make_repo(default_branch="master")
         facts = preflight.git_facts(repo)
