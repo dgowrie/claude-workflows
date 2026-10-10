@@ -11,6 +11,8 @@ The other end of [`/handoff`](../handoff/SKILL.md). `/handoff` compacts a sessio
 
 Read [`TRIAGE.md`](TRIAGE.md) at Phase 0. It carries the classification taxonomies, the mode thresholds, and every artifact format this file refers to.
 
+Fork workflows are out of scope: the run works on a branch of the repository its pull request targets. With an `upstream` remote, `gh` resolves it ahead of `origin`, so a fork's own pull requests read as cross-repository and the resume and branch checks do not see them.
+
 Run `gh` and `preflight.py` outside the command sandbox. The sandbox cannot reach the credential keyring, so `gh auth status` exits 1 there and a working install reports as unauthenticated.
 
 ## Modes

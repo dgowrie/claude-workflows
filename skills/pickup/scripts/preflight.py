@@ -546,8 +546,9 @@ def find_run_prs(prs, handoff_doc, viewer):
 def find_branch_pr(prs, branch):
     """The open same-repo PR whose head is `branch`, or None.
 
-    Fork PRs are excluded: they routinely reuse names like `patch-1`, and the
-    run never pushes to a fork.
+    Fork PRs are excluded: they routinely reuse names like `patch-1`, and fork
+    workflows are out of scope (see SKILL.md), so a cross-repository head is
+    never the branch the run pushes to.
     """
     for pr in sorted(prs, key=lambda pr: pr.get("number", 0)):
         if pr.get("headRefName") == branch and not pr.get("isCrossRepository"):
