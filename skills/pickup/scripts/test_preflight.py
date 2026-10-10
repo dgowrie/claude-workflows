@@ -33,6 +33,34 @@ def load():
 
 preflight = load()
 
+_isolated_environment = None
+
+
+def setUpModule():
+    """Hide the developer's git configuration from every git call, including
+    the ones preflight itself makes.
+
+    Patching only the fixture helper would leave `git_facts` reading the host's
+    config, so a local `status.showUntrackedFiles=no` or `core.hooksPath` would
+    change results on one machine and not another. `GIT_CONFIG_GLOBAL` needs git
+    2.32; pointing `HOME` and `XDG_CONFIG_HOME` at an empty directory covers
+    older git too.
+    """
+    global _isolated_environment
+    empty_home = tempfile.mkdtemp()
+    _isolated_environment = mock.patch.dict(os.environ, {
+        "GIT_CONFIG_GLOBAL": os.devnull,
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "HOME": empty_home,
+        "XDG_CONFIG_HOME": empty_home,
+    })
+    _isolated_environment.start()
+
+
+def tearDownModule():
+    _isolated_environment.stop()
+
+
 GIT_IDENTITY = [
     "-c", "user.name=Test",
     "-c", "user.email=test@example.com",
