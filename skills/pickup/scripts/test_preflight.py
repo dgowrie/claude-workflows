@@ -803,49 +803,47 @@ def citing(handoff_name):
     return "Picked up from `{}`.".format(handoff_name)
 
 
-class FindRunPr(unittest.TestCase):
+class FindRunPrs(unittest.TestCase):
     """Resume detection. Keyed on the handoff document a PR body cites, not on
     the branch name, so a run resumes even from a differently named branch."""
 
     HANDOFF = "/tmp/scratch/handoff-featurecard-layout.md"
     NAME = "handoff-featurecard-layout.md"
 
-    def find(self, prs):
-        return preflight.find_run_pr(prs, self.HANDOFF, VIEWER)
+    def numbers(self, prs):
+        return [pr["number"] for pr in preflight.find_run_prs(prs, self.HANDOFF, VIEWER)]
 
     def test_no_open_prs(self):
-        self.assertIsNone(self.find([]))
+        self.assertEqual(self.numbers([]), [])
 
     def test_body_citing_the_handoff_matches(self):
-        self.assertEqual(self.find([make_pr(7, citing(self.NAME))])["number"], 7)
+        self.assertEqual(self.numbers([make_pr(7, citing(self.NAME))]), [7])
 
     def test_unrelated_prs_do_not_match(self):
         prs = [make_pr(4, "unrelated work"), make_pr(5, citing("handoff-other.md"))]
-        self.assertIsNone(self.find(prs))
+        self.assertEqual(self.numbers(prs), [])
 
     def test_a_name_containing_the_basename_does_not_match(self):
         """A substring test lets `old-handoff-featurecard-layout.md` claim the
-        run, and lowest-number-wins then prefers it over the real PR."""
+        run as well as the real PR."""
         prs = [make_pr(5, citing("old-" + self.NAME)), make_pr(9, citing(self.NAME))]
-        self.assertEqual(self.find(prs)["number"], 9)
+        self.assertEqual(self.numbers(prs), [9])
 
     def test_a_bare_mention_is_not_a_citation(self):
-        self.assertIsNone(self.find([make_pr(5, "see " + self.NAME)]))
+        self.assertEqual(self.numbers([make_pr(5, "see " + self.NAME)]), [])
 
     def test_another_authors_pr_is_never_adopted(self):
         """The mandate forbids touching any pull request but the run's own. A
         colleague's PR that happens to cite the same name is not one."""
-        self.assertIsNone(self.find([make_pr(5, citing(self.NAME), login="someone")]))
+        prs = [make_pr(5, citing(self.NAME), login="someone")]
+        self.assertEqual(self.numbers(prs), [])
 
-    def test_lowest_number_wins_when_several_match(self):
-        """Two PRs citing one handoff means an earlier run was abandoned rather
-        than resumed. The older one is the run to rejoin."""
+    def test_every_match_is_returned_in_number_order(self):
         prs = [make_pr(9, citing(self.NAME)), make_pr(3, citing(self.NAME))]
-        self.assertEqual(self.find(prs)["number"], 3)
+        self.assertEqual(self.numbers(prs), [3, 9])
 
     def test_missing_body_is_tolerated(self):
-        prs = [{"number": 2}, make_pr(3, None)]
-        self.assertIsNone(self.find(prs))
+        self.assertEqual(self.numbers([{"number": 2}, make_pr(3, None)]), [])
 
 
 class FindBranchPr(unittest.TestCase):
@@ -943,6 +941,19 @@ class Blockers(unittest.TestCase):
         self.assertEqual(result["blockers"], [])
         self.assertEqual(result["existing_pr"]["number"], 4)
 
+    def test_several_run_prs_citing_one_handoff_block(self):
+        """Two of the viewer's PRs citing one handoff name means either an
+        abandoned run or two handoffs sharing a basename. Silently picking one
+        resumes the wrong run half the time."""
+        repo = make_repo()
+        doc = make_handoff_doc()
+        cite = citing(os.path.basename(doc))
+        result = self.collect(repo, doc, prs=[make_pr(3, cite), make_pr(9, cite)])
+        self.assertIn(
+            "pickup-run-ambiguous", [b["code"] for b in result["blockers"]]
+        )
+        self.assertIsNone(result["existing_pr"])
+
     def test_unknown_viewer_blocks(self):
         """Without the authenticated login there is no telling the run's own
         PR from anyone else's, so a resume cannot be ruled out."""
@@ -1024,6 +1035,10 @@ class Blockers(unittest.TestCase):
         }
         yield "pr-lookup-failed", repo_with(), doc, {"prs": None}
         yield "gh-viewer-unknown", repo_with(), doc, {"viewer": None}
+        cite = citing(os.path.basename(doc))
+        yield "pickup-run-ambiguous", repo_with(), doc, {
+            "prs": [make_pr(3, cite), make_pr(9, cite)]
+        }
         yield "branch-has-other-pr", repo_with(on_feature), doc, {
             "prs": [make_pr(4, head="feat/thing")]
         }

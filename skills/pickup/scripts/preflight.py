@@ -38,10 +38,10 @@ Known bounds:
   or `master`, then to its current branch; a repo with a remote that resolves
   none of these reports `default-branch-unknown` rather than a guess.
 * Resume detection looks for the exact citation line `/pickup` writes, naming
-  the handoff document's basename, in the viewer's own open PR bodies. Two of
-  the viewer's handoff documents sharing a basename would collide; the
-  lowest-numbered match wins, so the collision resolves to a stable answer
-  rather than an arbitrary one.
+  the handoff document's basename, in the viewer's own open PR bodies. More
+  than one match blocks as `pickup-run-ambiguous` rather than picking one,
+  since an abandoned run and two handoffs sharing a basename look the same.
+  `/handoff` timestamps its filenames so the second case should not arise.
 * The open-PR listing reads one window of `PR_LIST_LIMIT` entries, newest
   first. A repo busy enough to fill it reports `pr-lookup-truncated` rather than
   a possibly incomplete answer, since a resume that cannot see its own pull
@@ -525,13 +525,14 @@ def gh_viewer(cwd):
     return login if code == 0 and login else None
 
 
-def find_run_pr(prs, handoff_doc, viewer):
-    """The open PR belonging to this run, or None.
+def find_run_prs(prs, handoff_doc, viewer):
+    """The viewer's open PRs citing this handoff document, lowest number first.
 
-    Keyed on the handoff document a PR body cites rather than on the branch name,
-    so a run resumes even when the branch was renamed between sessions. Only the
-    viewer's own PRs qualify: the mandate forbids touching anyone else's, and a
-    colleague's PR citing the same filename is not this run.
+    Keyed on the citation rather than on the branch name, so a run resumes even
+    when the branch was renamed between sessions. Only the viewer's own PRs
+    qualify: the mandate forbids touching anyone else's, and a colleague's PR
+    citing the same filename is not this run. All matches are returned so the
+    caller can refuse to guess between them.
     """
     citation = RUN_CITATION.format(os.path.basename(handoff_doc))
     matches = [
@@ -539,9 +540,7 @@ def find_run_pr(prs, handoff_doc, viewer):
         if citation in (pr.get("body") or "")
         and (pr.get("author") or {}).get("login") == viewer
     ]
-    if not matches:
-        return None
-    return sorted(matches, key=lambda pr: pr.get("number", 0))[0]
+    return sorted(matches, key=lambda pr: pr.get("number", 0))
 
 
 def find_branch_pr(prs, branch):
@@ -660,9 +659,17 @@ def collect(cwd, handoff_doc, paths=None):
             "detail": "Could not read the authenticated login, so this run's "
                       "own PR cannot be told apart from anyone else's.",
         })
-    existing_pr = (
-        find_run_pr(open_prs, handoff_doc, viewer) if open_prs and viewer else None
-    )
+    run_prs = find_run_prs(open_prs, handoff_doc, viewer) if open_prs and viewer else []
+    existing_pr = run_prs[0] if len(run_prs) == 1 else None
+    if len(run_prs) > 1:
+        blockers.append({
+            "code": "pickup-run-ambiguous",
+            "detail": "PRs {} all cite this handoff document, so which run to "
+                      "resume is unknown. Close the stale ones or rename the "
+                      "handoff document.".format(
+                          ", ".join("#{}".format(pr["number"]) for pr in run_prs)
+                      ),
+        })
     branch = facts["current_branch"]
     current_branch_pr = (
         find_branch_pr(open_prs, branch)
