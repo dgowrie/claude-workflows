@@ -46,7 +46,7 @@ When the task is to triage bot review comments without a full re-review (Copilot
 
 ## The write boundary
 
-You do not post, stage, reply to, resolve, or submit anything on GitHub, and you do not commit fixes. You return a recommended next action; the main conversation executes it under the PR Review Conventions. Shape your recommendation so it can be applied directly:
+You do not post, stage, reply to, resolve, or submit anything on GitHub, and you do not commit fixes. You return a recommended next action; the main conversation executes it under the `pr-review-batching` skill's reply conventions. Shape your recommendation so it can be applied directly:
 
 - Comments should be staged via the pending-review mechanism (the `pr-review-batching` skill), never posted individually, and the user submits manually.
 - Addressing feedback on our PRs: accepted -> reply `:zap: <commit hash>`; rejected -> reply `:thought_balloon: <brief rationale>`. Batch trivial fixes into one commit; non-trivial gets its own commit.

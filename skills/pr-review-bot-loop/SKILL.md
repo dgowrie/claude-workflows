@@ -56,6 +56,20 @@ fixes, and driving a reviewer at their branch is noise they did not ask for. For
 
 ---
 
+## Run alongside CI watch
+
+After pushing to any PR (including drafts), run this loop concurrently with a CI watch, not
+sequentially:
+
+- **CI watch:** poll with `gh pr checks`. On failure: read logs (`gh run view --log-failed`),
+  diagnose, fix, commit, push, resume watching. On success: briefly confirm green.
+- **CI is authoritative.** Local validation is necessary but not sufficient.
+- Evaluate every bot comment automatically: read it, verify the claim, categorize
+  (accept/reject/nuance), present a concise recommendation. Act only with explicit
+  authorization. Batch trivial fixes into one commit; flag non-trivial scope separately.
+
+---
+
 ## Inputs
 
 | Input | Values | Default |
@@ -158,7 +172,7 @@ It is three-state. Collapsing it to a boolean is a bug in opposite directions.
 | State | Condition | Loop action |
 | --- | --- | --- |
 | clean | review at head, nothing posted and nothing suppressed | terminate |
-| triage-required | review at head, and any of: inline comments non-zero, suppressed count non-zero or unparsable, or parsed findings disagreeing with a declared count | triage whatever it reported, posted or withheld, then fix, push, re-request |
+| triage-required | review at head, and any of: inline comments non-zero, suppressed count non-zero or unparsable, or an overview body that is not a known-clean verdict and known-clean sentence with nothing else in it | triage whatever it reported, posted or withheld, then fix, push, re-request |
 | not-applicable | no review at head | re-request, or wait if one is pending |
 
 - **Scope the check to the review at `headRefOid`.** A detector that scans every review on the PR
@@ -171,12 +185,71 @@ It is three-state. Collapsing it to a boolean is a bug in opposite directions.
 - **An unparsable count is triage-required.** Silent-zero is the exact failure the signal exists to
   prevent, so a parser that cannot read the count reports that, never zero.
 
-Two constraints hold the parser together, both live in `copilot-signals.py`, and both were measured
-by running it rather than by reading it. **Match `suppress` plus a parenthesised count**: Copilot has
+Three constraints hold the parser together, all live in `copilot-signals.py`, and all were measured
+by running it rather than by reading it. **Match the label plus a parenthesised count**: Copilot has
 used at least two labels (`Comments suppressed due to low confidence (N)` and `Suppressed comments
-(N)`), so a detector keyed to either literal phrase under-reports on the other, and expect a third.
-**Gate on the summary text before parsing the block**: `Show a summary per file` is a benign
-`<details>` block living in the same body.
+(N)`), so a detector keyed to either literal phrase under-reports on the other; expect a third, and
+flag an unparsable label as undeclared rather than skipping it. **Match the label anywhere in the
+`<details>` block, not only in the `<summary>`**: Copilot moved the labelled count out of the summary
+into a heading inside a generic `<summary>Review details</summary>` block, and a detector that gated
+on the summary read the newer layout as clean and terminated the loop on a withheld finding. **Keep
+the label tight, not a bare `suppress`**: Copilot's per-file overview and the benign `Show a summary
+per file` block restate each changed file's description, so a PR that is *about* suppressing
+something puts the word in an otherwise clean block; the tight `suppressed comments` / `comments
+suppressed` phrase adjacent to a count, scoped to a `<details>` block, is what excludes it.
+
+### Findings outside both: the overview body
+
+Copilot's newer review body (marked `<!-- ccr-overview-v2 -->`) can carry a finding that is neither
+an inline comment nor in a suppressed block, and every one of these shapes read as clean before the
+detector learned them. It prints them as `body_only=N` and `headline="<verdict>: <sentence>"`.
+
+- **The verdict is an allow-list.** `### 🔵 Needs a closer look` plus one sentence, with
+  `**Findings:** None`, no list, and zero inline comments, was a real concern on a first review.
+  So was `### 🟡 Changes recommended`. Only `🟢 Approval recommended` has been seen on a genuinely
+  clean review, so it is the only allow-listed verdict; any other text is triage-required until a
+  second clean sample is captured.
+- **The sentence is an allow-list too, not a parser.** A green verdict can still carry a finding:
+  "No blocking issues were identified; only a minor test naming nit remains." sat under
+  `Approval recommended` with `Findings: None`. So the sentence is load-bearing and cannot be
+  ignored. An earlier version tried to *classify* it, scanning for concern words with negation,
+  coordination, subordination and resolution handling; Copilot produced a new sentence shape that
+  fooled it on nine consecutive rounds, several of them regressions a prior round's fix had
+  introduced. Regex cannot do the reference resolution this needs ("which finding does *was fixed*
+  attach to?"), and every miss was fail-open, which is the one direction this loop must not fail.
+  So the sentence is now matched against a short allow-list of human-verified clean sentences
+  (normalised for case, surrounding whitespace, and trailing punctuation); an empty sentence
+  (verdict plus metadata only) carries no claim and is clean on its own. Anything else is
+  triage-required. This **fails closed**: a novel clean sentence costs one human read and a
+  disposition comment, never a missed finding. Grow the allow-list as clean samples are captured;
+  its growth is monotone and safe, unlike the regex rules, which regressed each other.
+- **Only v2 is verified.** A `ccr-overview-vN` marker other than v2 is still parsed, but its
+  headline can never clear the review: a later layout can move findings somewhere the parser does
+  not read. Expect the loop to stay at exit `1` with a "layout vN" reason until the parser is
+  checked against that version.
+- **Vote tags count.** A `**Review findings:**` bullet list and `(N vote(s))` mentions in the
+  per-file table are findings with no thread. The list and the table can restate the same finding,
+  so each is counted on its own and the larger wins, then compared against `Open (N)` and the
+  inline comments; the surplus is `body_only`. `Resolved since last review` blocks are excluded,
+  since those were triaged in an earlier round. The number is approximate (one finding can become
+  several inline comments, and one repeated within the table can overcount); the verdict depends
+  only on whether it is non-zero.
+- **A `Previously missed (N)` block is a finding.** It holds findings in code the review says did
+  not change, with no inline thread and no vote tag, so under a green headline it is the only place
+  the finding appears. N is added to `body_only`.
+- **An unreadable count is not zero.** A missing or unparsable `**Findings:**` value (`Unknown`, an
+  empty one), or an `Open` or `Previously missed` block with no readable number, parses to the same
+  value as "nothing declared". Each is triage-required with its own reason, since clearing a review
+  on the headline alone while its own tally is unreadable is the silent zero this signal exists to
+  prevent.
+
+A headline finding has no thread to reply on, and a description that honestly lists deferred
+trade-offs can hold the headline at "Needs a closer look" indefinitely. Disposition it the way a
+suppressed finding is dispositioned, which is the same split the loop uses for any threadless
+finding: the commit message that fixes it, or a PR comment when you decline it. Either records it
+where the detector's inputs live, so exit `1` on that headline alone can end the loop under step 1.
+When a headline concern has no counterpart in the code, check the PR description first; a stale
+description produces headline findings by itself.
 
 **Validate a detector against a known-positive PR, and across a state transition.** Both parser
 traps and both scoping traps were found by running the thing against PRs whose answers were already
@@ -239,13 +312,18 @@ on the PR rather than in session memory, and a fresh session picks the loop up m
 
 ### Thread hygiene
 
-Reply in the format the global PR Review Conventions define. Replies need the **numeric** comment
+Reply in the format the `pr-review-batching` skill's reply conventions define. Replies need the **numeric** comment
 id, not the GraphQL node id, which 404s: `POST /pulls/{n}/comments/{numericId}/replies`.
 
 **Leave every bot thread open.** An open thread keeps the finding and your response visible for the
 human reviewer who comes next. This is the one action the loop must never take, and it is called out
 because the instinct while driving toward "clean" is to tidy threads shut; a session following an
 earlier version of `/pr-review` did exactly that. Resolve only threads you authored yourself.
+
+Copilot may resolve its own threads once it judges them fixed (observed: `isResolved: true,
+resolvedBy: Copilot`, listed under `Resolved since last review (N)` in the next overview). So a
+resolved bot thread is no longer evidence that this loop closed it; read your `:zap:` reply, not the
+resolved flag, for disposition.
 
 Thread replies publish the moment you post them and cannot be staged as drafts
 (`/pr-review-batching` Operation 3). Nothing in this loop is a draft.
@@ -323,9 +401,10 @@ head.
 
 ## Notes
 
-- Global conventions (PR Review Conventions, TDD, Definition of Done, commit and dash rules) live in
-  the global `CLAUDE.md` and `~/.claude/rules/`. This skill obeys them and points at them rather
-  than copying them. The one repetition it does carry is deliberate: leaving bot threads open is
-  restated here because driving toward "clean" is exactly the context that tempts you past it.
+- Global conventions (TDD, Definition of Done, commit and dash rules) live in the global
+  `CLAUDE.md` and `~/.claude/rules/`; PR reply and thread-resolution conventions live in the
+  `pr-review-batching` skill. This skill obeys them and points at them rather than copying them.
+  The one repetition it does carry is deliberate: leaving bot threads open is restated here
+  because driving toward "clean" is exactly the context that tempts you past it.
 - Related: `/pr-review` (find and format), `/pr-review-adversarial` (validate findings),
   `/pr-review-batching` (stage, never publish).

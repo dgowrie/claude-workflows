@@ -58,6 +58,149 @@ OLD_LABEL = (
     "**src/a.py** one\n**src/b.py** two\n**src/c.py** three\n</details>"
 )
 BENIGN = "<details><summary>Show a summary per file</summary>\n**src/a.py** fine\n</details>"
+# The current Copilot layout: a generic "Review details" <summary> with the
+# labelled count as a heading inside the block, not in the summary. The
+# summary-only gate read this as clean and terminated the loop on the withheld
+# finding; this is the regression these cases lock down.
+REVIEW_DETAILS_SUPPRESSED = (
+    "### Changes recommended\n\n"
+    "The tooltip text reads like a total while the metric is a rate series.\n\n"
+    "<details>\n<summary>Review details</summary>\n\n"
+    "### Suppressed comments (1)\n\n"
+    "**Previously missed (1)** - in code that has not changed since the last review.\n\n"
+    "**src/components/FeatureCard/index.tsx:35**\n"
+    "* The prop comment says space-between but the layout uses marginLeft:auto.\n\n"
+    "- **Files reviewed:** 16/16 changed files\n"
+    "- **Comments generated:** 1\n"
+    "- **Review effort level:** Lite\n"
+    "</details>"
+)
+# A clean review in the same layout whose prose and per-file summary both mention
+# "suppress" (the PR is about suppressing an alert) but which withholds nothing.
+# The tight label plus <details> scoping must keep this clean, or the loop never
+# terminates on a suppress-mentioning PR.
+REVIEW_DETAILS_CLEAN_MENTIONS_SUPPRESS = (
+    "### Looks good\n\n"
+    "This PR makes the background query suppress the global error alert.\n\n"
+    "<details>\n<summary>Review details</summary>\n\n"
+    "- **Files reviewed:** 16/16 changed files\n"
+    "- **Comments generated:** 0\n"
+    "</details>\n"
+    "<details>\n<summary>Show a summary per file</summary>\n\n"
+    "**src/hooks/use-x.ts** Now suppresses the global error alert on failure.\n"
+    "</details>"
+)
+
+# The `ccr-overview-v2` body layout. Findings can live in the headline, a
+# "Review findings" list, or a per-file table cell, none of which is an inline
+# comment or a suppressed block, so every shape below read as CLEAN before the
+# overview parse existed. The bodies are synthetic: the observed PRs are private.
+OVERVIEW_MARKER = "<!-- ccr-overview-v2 -->\n\n## Copilot review overview\n\n"
+OVERVIEW_CLEAN = (
+    OVERVIEW_MARKER + "### 🟢 Approval recommended\n\n"
+    "The changes are fully reviewed, tested, and have no unresolved blocking issues.\n\n"
+    "**Review effort:** Lite\n**Findings:** None\n"
+)
+# A headline-only concern: the one place the finding appears is the sentence.
+OVERVIEW_HEADLINE_CONCERN = (
+    OVERVIEW_MARKER + "### 🔵 Needs a closer look\n\n"
+    "The boundary case in the changed component is not handled.\n\n"
+    "**Review effort:** Lite\n**Findings:** None\n\n"
+    "<details>\n<summary><strong>What changed in this PR</strong></summary>\n\n"
+    "A summary paragraph.\n\n| File | Reviewed changes |\n|---|---|\n"
+    "| `src/a.ts` | Reworked the handler. |\n</details>\n"
+)
+# A green verdict whose sentence still names a leftover nit.
+OVERVIEW_CLEAN_VERDICT_WITH_NIT = (
+    OVERVIEW_MARKER + "### 🟢 Approval recommended\n\n"
+    "No blocking issues were identified; only a minor test naming nit remains.\n\n"
+    "**Review effort:** Lite\n**Findings:** None\n"
+)
+OVERVIEW_REVIEW_FINDINGS_LIST = (
+    OVERVIEW_MARKER + "### 🟡 Changes recommended\n\n"
+    "A moderate issue affects the handler.\n\n"
+    "**Findings:** None\n\n"
+    "<details>\n<summary><strong>What changed in this PR</strong></summary>\n\n"
+    "**Review findings:**\n"
+    "- **Moderate (2 votes):** the handler drops errors.\n"
+    "- **Moderate (1 vote):** the retry has no cap.\n\n"
+    "A summary paragraph.\n</details>\n"
+)
+# Finding C has no inline thread and is absent from Open (N); only the per-file
+# cell and the headline count betray it.
+OVERVIEW_TABLE_ONLY_FINDING = (
+    OVERVIEW_MARKER + "### 🟡 Changes recommended\n\n"
+    "Three unresolved moderate issues affect two areas.\n\n"
+    "**Review effort:** Lite\n**Findings:** 2 moderate\n\n"
+    "<details open>\n<summary><strong>Open (2)</strong></summary>\n\n"
+    "- moderate [Finding A](#discussion_r1) · New\n"
+    "- moderate [Finding B](#discussion_r2) · New\n</details>\n\n"
+    "<details>\n<summary><strong>What changed in this PR</strong></summary>\n\n"
+    "| File | Summary |\n|---|---|\n"
+    "| `src/one.ts` | Change. Moderate issue: Finding B (2 votes). |\n"
+    "| `src/two.ts` | Change. Moderate issues: Finding A (2 votes), and Finding C (1 vote). |\n"
+    "</details>\n"
+)
+# A green verdict, but a vote-tagged finding that nothing else accounts for.
+OVERVIEW_CLEAN_VERDICT_TABLE_FINDING = (
+    OVERVIEW_CLEAN + "\n<details>\n<summary><strong>What changed in this PR</strong></summary>\n\n"
+    "| File | Summary |\n|---|---|\n"
+    "| `src/one.ts` | Change. Moderate issue: Finding C (1 vote). |\n</details>\n"
+)
+# Resolved threads keep their vote tags; they were already triaged and must not
+# keep a clean round dirty.
+OVERVIEW_CLEAN_WITH_RESOLVED = (
+    OVERVIEW_CLEAN + "\n<details>\n"
+    "<summary><strong>Resolved since last review (1)</strong></summary>\n\n"
+    "- moderate [Finding A](#discussion_r1) (2 votes)\n</details>\n"
+)
+# The same finding in both the "Review findings" list and a per-file cell. It is
+# one finding, so it must not read as two.
+OVERVIEW_FINDING_IN_LIST_AND_TABLE = (
+    OVERVIEW_MARKER + "### 🟡 Changes recommended\n\n"
+    "A moderate issue affects the handler.\n\n"
+    "**Findings:** None\n\n"
+    "<details>\n<summary><strong>What changed in this PR</strong></summary>\n\n"
+    "**Review findings:**\n"
+    "- **Moderate (2 votes):** the handler drops errors.\n\n"
+    "| File | Summary |\n|---|---|\n"
+    "| `src/a.ts` | Change. Moderate issue: the handler drops errors (2 votes). |\n"
+    "</details>\n"
+)
+# A finding carried only by a standalone "Previously missed (N)" block: no inline
+# thread, no vote tag, and `Findings: None` above it.
+PREVIOUSLY_MISSED_BLOCK = (
+    "\n<details>\n<summary><strong>Previously missed ({count})</strong></summary>\n\n"
+    "In code that hasn't changed since last review\n\n"
+    "<details>\n<summary>Avoid counting resolved mentions as findings</summary>\n\n"
+    "`src/a.py:208`\n\nThe helper treats every number as a count.\n</details>\n</details>\n"
+)
+# A resolved section with two nested finding details, each vote-tagged. The outer
+# summary says "resolved", so the whole section was triaged in an earlier round. A
+# non-greedy details match stops at the first nested `</details>`, iterates the second
+# nested finding on its own (its summary has no "resolved"), and leaks its vote tag
+# into body_only, so a clean review never terminates.
+OVERVIEW_CLEAN_NESTED_RESOLVED = (
+    OVERVIEW_CLEAN +
+    "\n<details>\n<summary><strong>2 resolved since last review</strong></summary>\n\n"
+    "<details>\n<summary>The handler drops errors (2 votes)</summary>\n\na\n</details>\n"
+    "<details>\n<summary>The retry has no cap (3 votes)</summary>\n\nb\n</details>\n"
+    "</details>\n"
+)
+# A top-level block whose summary merely contains the word "resolved" but is not a
+# "resolved since last review" section: it still carries a live, vote-tagged finding.
+# Only an actual resolved-since-last-review section may be dropped whole; a bare
+# substring match on "resolved" would exclude this block and read CLEAN on a real
+# finding, which is the silent-zero this gate exists to prevent.
+OVERVIEW_RESOLVED_WORD_WITH_OPEN_FINDING = (
+    OVERVIEW_CLEAN +
+    "\n<details>\n<summary><strong>Resolved and open</strong></summary>\n\n"
+    "- moderate the handler drops errors (2 votes)\n</details>\n"
+)
+OVERVIEW_UNKNOWN_HEADLINE = (
+    OVERVIEW_MARKER + "### 🟣 Looks different today\n\nSomething.\n\n**Findings:** None\n"
+)
+OVERVIEW_NO_HEADLINE = OVERVIEW_MARKER + "**Review effort:** Lite\n**Findings:** None\n"
 
 
 def review(oid, inline=0, body="", when="2026-01-01T00:00:00Z",
@@ -140,6 +283,19 @@ class ClassificationTests(unittest.TestCase):
     def test_older_label_variant_requires_triage(self):
         self.assertVerdict([review(HEAD, body=OLD_LABEL)], signals.TRIAGE_REQUIRED)
 
+    def test_review_details_layout_requires_triage(self):
+        """The current layout: the labelled count is a heading inside a generic
+        "Review details" block, not the <summary>. The summary-only gate read this
+        as clean and terminated the loop on a withheld finding."""
+        self.assertVerdict([review(HEAD, body=REVIEW_DETAILS_SUPPRESSED)],
+                           signals.TRIAGE_REQUIRED)
+
+    def test_review_details_clean_body_mentioning_suppress_stays_clean(self):
+        """The tight label plus <details> scoping keeps a PR that is *about*
+        suppressing something clean when it actually withholds nothing."""
+        self.assertVerdict([review(HEAD, body=REVIEW_DETAILS_CLEAN_MENTIONS_SUPPRESS)],
+                           signals.CLEAN)
+
     def test_author_review_artifacts_are_not_verdicts(self):
         """Our own :zap: thread replies create empty COMMENTED reviews."""
         self.assertVerdict([review(HEAD, login="dgowrie", body=SUPPRESSED_TWO)],
@@ -203,6 +359,224 @@ class ClassificationTests(unittest.TestCase):
         self.assertVerdict(
             [review(OLD, body=SUPPRESSED_TWO), review(HEAD)], signals.CLEAN)
 
+    def test_overview_known_clean_headline_is_clean(self):
+        self.assertVerdict([review(HEAD, body=OVERVIEW_CLEAN)], signals.CLEAN)
+
+    def test_overview_headline_concern_with_no_findings_requires_triage(self):
+        """The headline is the only place the finding appears: no inline comment,
+        `Findings: None`, no suppressed block. Read as clean, it ended the loop."""
+        self.assertVerdict([review(HEAD, body=OVERVIEW_HEADLINE_CONCERN)],
+                           signals.TRIAGE_REQUIRED)
+
+    def test_overview_clean_verdict_naming_a_remaining_nit_requires_triage(self):
+        self.assertVerdict([review(HEAD, body=OVERVIEW_CLEAN_VERDICT_WITH_NIT)],
+                           signals.TRIAGE_REQUIRED)
+
+    def test_overview_review_findings_list_requires_triage(self):
+        self.assertVerdict([review(HEAD, body=OVERVIEW_REVIEW_FINDINGS_LIST)],
+                           signals.TRIAGE_REQUIRED)
+
+    def test_overview_table_only_finding_requires_triage(self):
+        self.assertVerdict([review(HEAD, body=OVERVIEW_TABLE_ONLY_FINDING)],
+                           signals.TRIAGE_REQUIRED)
+
+    def test_overview_vote_tagged_finding_under_a_clean_headline_requires_triage(self):
+        """Isolates the vote count from the headline: the verdict is the known-clean
+        one and `Findings: None`, so only the per-file cell can trigger this."""
+        self.assertVerdict([review(HEAD, body=OVERVIEW_CLEAN_VERDICT_TABLE_FINDING)],
+                           signals.TRIAGE_REQUIRED)
+
+    def test_overview_unknown_headline_fails_closed(self):
+        self.assertVerdict([review(HEAD, body=OVERVIEW_UNKNOWN_HEADLINE)],
+                           signals.TRIAGE_REQUIRED)
+
+    def test_overview_without_a_parsable_headline_fails_closed(self):
+        self.assertVerdict([review(HEAD, body=OVERVIEW_NO_HEADLINE)],
+                           signals.TRIAGE_REQUIRED)
+
+    def test_overview_resolved_since_last_review_votes_do_not_keep_the_loop_dirty(self):
+        self.assertVerdict([review(HEAD, body=OVERVIEW_CLEAN_WITH_RESOLVED)],
+                           signals.CLEAN)
+
+    def test_overview_nested_resolved_findings_do_not_leak_into_body_only(self):
+        """A resolved section with several nested findings is excluded as a whole;
+        no child's vote tag leaks past a non-greedy details match."""
+        self.assertVerdict([review(HEAD, body=OVERVIEW_CLEAN_NESTED_RESOLVED)],
+                           signals.CLEAN)
+
+    def test_overview_resolved_word_in_summary_does_not_drop_a_live_finding(self):
+        """Only a "resolved since last review" section is excluded whole. A block
+        whose summary merely contains "resolved" alongside a live, vote-tagged
+        finding must still count: a bare-substring match would silently drop it."""
+        self.assertVerdict([review(HEAD, body=OVERVIEW_RESOLVED_WORD_WITH_OPEN_FINDING)],
+                           signals.TRIAGE_REQUIRED)
+
+    def test_overview_only_the_known_clean_sentence_is_clean(self):
+        """The sentence is matched against an allow-list, not parsed. Case,
+        surrounding whitespace, and trailing punctuation are normalised away."""
+        for sentence in (
+            "The changes are fully reviewed, tested, and have no unresolved blocking issues.",
+            "the changes are fully reviewed, tested, and have no unresolved blocking issues",
+            "  The changes are fully reviewed, tested, and have no unresolved blocking issues!  ",
+        ):
+            with self.subTest(sentence=sentence):
+                body = OVERVIEW_CLEAN.replace(
+                    "The changes are fully reviewed, tested, and have no unresolved "
+                    "blocking issues.", sentence)
+                self.assertVerdict([review(HEAD, body=body)], signals.CLEAN)
+
+    def test_overview_clean_verdict_with_no_sentence_is_clean(self):
+        """Verdict plus metadata, no prose paragraph: no claim to misread, and the
+        structural counts still run."""
+        body = (OVERVIEW_MARKER + "### 🟢 Approval recommended\n\n"
+                "**Review effort:** Lite\n**Findings:** None\n")
+        self.assertVerdict([review(HEAD, body=body)], signals.CLEAN)
+
+    def test_overview_a_novel_sentence_fails_closed(self):
+        """A sentence off the allow-list triages even when it reads clean to a
+        human. That false-closed is the accepted cost: one human read, never a
+        missed finding. These all read clean and all triage."""
+        for sentence in ("No minor issues remain.",
+                         "All three issues were resolved.",
+                         "LGTM.",
+                         "The changes look good and are well tested."):
+            with self.subTest(sentence=sentence):
+                body = OVERVIEW_CLEAN.replace(
+                    "The changes are fully reviewed, tested, and have no unresolved "
+                    "blocking issues.", sentence)
+                self.assertVerdict([review(HEAD, body=body)], signals.TRIAGE_REQUIRED)
+
+    def test_overview_a_sentence_naming_a_leftover_requires_triage(self):
+        """The load-bearing case: a green verdict with `Findings: None` whose only
+        finding is in the sentence. Off the allow-list, so it triages."""
+        for sentence in ("Only a minor naming nit remains.",
+                         "No blocking issues, but a nit remains.",
+                         "The minor nit was not fixed."):
+            with self.subTest(sentence=sentence):
+                body = OVERVIEW_CLEAN.replace(
+                    "The changes are fully reviewed, tested, and have no unresolved "
+                    "blocking issues.", sentence)
+                self.assertVerdict([review(HEAD, body=body)], signals.TRIAGE_REQUIRED)
+
+    def test_overview_prose_appended_to_a_metadata_row_is_not_hidden(self):
+        """A metadata row is the label plus its own short value. A concern appended
+        to the row, with or without a trailing period, makes the line prose and must
+        reach the allow-list, not be skipped by a prefix match."""
+        for effort in ("Lite - a boundary case remains unhandled.",
+                       "Lite and a boundary case remains unhandled",
+                       "Lite. A boundary case remains unhandled."):
+            with self.subTest(effort=effort):
+                body = OVERVIEW_CLEAN.replace("**Review effort:** Lite",
+                                              f"**Review effort:** {effort}")
+                self.assertVerdict([review(HEAD, body=body)], signals.TRIAGE_REQUIRED)
+
+    def test_overview_prose_after_a_files_reviewed_ratio_is_not_hidden(self):
+        """The Files reviewed value is the ratio and the literal "changed file(s)",
+        not arbitrary trailing words that could carry a concern."""
+        body = OVERVIEW_CLEAN.replace(
+            "**Review effort:** Lite",
+            "**Files reviewed:** 1/1 and a boundary case remains unhandled")
+        self.assertVerdict([review(HEAD, body=body)], signals.TRIAGE_REQUIRED)
+
+    def test_overview_files_reviewed_row_is_still_metadata(self):
+        body = (OVERVIEW_MARKER + "### 🟢 Approval recommended\n\n"
+                "**Files reviewed:** 16/16 changed files\n**Findings:** None\n")
+        self.assertVerdict([review(HEAD, body=body)], signals.CLEAN)
+
+    def test_overview_emoji_prefixed_metadata_row_is_still_metadata(self):
+        """The real layout prefixes the effort row with a badge emoji; it must still
+        read as metadata so a verdict-plus-metadata body stays clean."""
+        body = (OVERVIEW_MARKER + "### 🟢 Approval recommended\n\n"
+                "🧠 **Review effort:** Balanced\n**Findings:** None\n")
+        self.assertVerdict([review(HEAD, body=body)], signals.CLEAN)
+
+    def test_overview_a_second_prose_paragraph_is_not_ignored(self):
+        """Every non-metadata paragraph must be allow-listed. The known-clean
+        sentence cannot carry a concern in a paragraph after it."""
+        body = OVERVIEW_CLEAN.replace(
+            "**Review effort:** Lite",
+            "A boundary case remains unhandled.\n\n**Review effort:** Lite")
+        self.assertVerdict([review(HEAD, body=body)], signals.TRIAGE_REQUIRED)
+
+    def test_overview_a_formatted_sentence_is_prose_not_skipped_metadata(self):
+        """Only the known metadata labels are skipped. A bold- or markup-wrapped
+        concern must read as a sentence and fail the allow-list, not vanish."""
+        for sentence in ("**A boundary case remains.**",
+                         "*A boundary case remains.*",
+                         "<strong>A boundary case remains.</strong>"):
+            with self.subTest(sentence=sentence):
+                body = OVERVIEW_CLEAN.replace(
+                    "The changes are fully reviewed, tested, and have no unresolved "
+                    "blocking issues.", sentence)
+                self.assertVerdict([review(HEAD, body=body)], signals.TRIAGE_REQUIRED)
+
+    def test_overview_unparsable_or_missing_findings_declaration_fails_closed(self):
+        """An unreadable declaration is not "no findings". Read as absent it
+        yields the same value as a clean review, which is the silent zero."""
+        for replacement in ("**Findings:** Unknown", "**Findings:**", "Findings: None", "",
+                            "**Findings:** NoneAvailable", "**Findings:** 0unknown",
+                            "**Findings:** None2", "**Findings:** 0.5", "**Findings:** 1.0",
+                            "**Findings:** None A boundary case remains unhandled.",
+                            "**Findings:** 0 a boundary case remains unhandled"):
+            with self.subTest(replacement=replacement):
+                body = OVERVIEW_CLEAN.replace("**Findings:** None", replacement)
+                self.assertVerdict([review(HEAD, body=body)], signals.TRIAGE_REQUIRED)
+
+    def test_overview_labelled_block_with_an_unreadable_count_fails_closed(self):
+        """"Previously missed" and "Open" carry findings. A label with no readable
+        number is not zero."""
+        for label in ("Previously missed", "Previously missed (several)",
+                      "Open", "Open (many)"):
+            with self.subTest(label=label):
+                body = OVERVIEW_CLEAN + (
+                    f"\n<details>\n<summary><strong>{label}</strong></summary>\n\n"
+                    "Something.\n</details>\n")
+                self.assertVerdict([review(HEAD, body=body)], signals.TRIAGE_REQUIRED)
+
+    def test_overview_declared_counts_with_a_severity_suffix_still_parse(self):
+        body = OVERVIEW_CLEAN.replace("**Findings:** None", "**Findings:** 0 low")
+        self.assertVerdict([review(HEAD, body=body)], signals.CLEAN)
+
+    def test_overview_previously_missed_block_requires_triage(self):
+        """Under a clean headline: the block is the only place the finding appears."""
+        body = OVERVIEW_CLEAN + PREVIOUSLY_MISSED_BLOCK.format(count=1)
+        self.assertVerdict([review(HEAD, body=body)], signals.TRIAGE_REQUIRED)
+
+    def test_overview_previously_missed_zero_and_genuinely_empty_is_clean(self):
+        body = OVERVIEW_CLEAN + (
+            "\n<details>\n<summary><strong>Previously missed (0)</strong></summary>\n\n"
+            "In code that hasn't changed since last review\n</details>\n")
+        self.assertVerdict([review(HEAD, body=body)], signals.CLEAN)
+
+    def test_overview_previously_missed_zero_with_nested_entries_requires_triage(self):
+        """A (0) label over a block that still lists findings is a silent zero: the
+        declared count is not trusted against the block's actual entries."""
+        body = OVERVIEW_CLEAN + PREVIOUSLY_MISSED_BLOCK.format(count=0)
+        self.assertVerdict([review(HEAD, body=body)], signals.TRIAGE_REQUIRED)
+
+    def test_overview_details_block_without_a_summary_fails_closed(self):
+        """A top-level block whose summary cannot be read is a parse failure, not a
+        benign block; its content is dropped from the sentence, so it must triage."""
+        body = OVERVIEW_CLEAN + (
+            "\n<details>\n\nA boundary case remains unhandled.\n</details>\n")
+        self.assertVerdict([review(HEAD, body=body)], signals.TRIAGE_REQUIRED)
+
+    def test_overview_nested_summary_is_not_read_as_the_outer_blocks_own(self):
+        """An outer block with no summary must not borrow a nested child's. A nested
+        "Resolved" summary could otherwise exclude the whole outer block and drop an
+        unresolved concern in it."""
+        body = OVERVIEW_CLEAN + (
+            "\n<details>\n"
+            "<details><summary><strong>1 resolved since last review</strong></summary>\n"
+            "- an old finding\n</details>\n"
+            "A boundary case remains unhandled.\n</details>\n")
+        self.assertVerdict([review(HEAD, body=body)], signals.TRIAGE_REQUIRED)
+
+    def test_overview_marker_is_scoped_to_the_review_at_head(self):
+        self.assertVerdict(
+            [review(OLD, body=OVERVIEW_HEADLINE_CONCERN), review(HEAD, body=OVERVIEW_CLEAN)],
+            signals.CLEAN)
+
 
 class ReportTests(unittest.TestCase):
     """The printed report is the other half of the interface.
@@ -257,6 +631,27 @@ class ReportTests(unittest.TestCase):
         """count sums declared blocks while findings span all of them."""
         self.assertNotIn("WARNING", self.report(
             [review(HEAD, body=SUPPRESSED_UNDECLARED + "\n" + SUPPRESSED_EMPTY)]))
+
+    def test_prints_the_headline_so_a_headline_only_triage_is_readable(self):
+        out = self.report([review(HEAD, body=OVERVIEW_HEADLINE_CONCERN)])
+        self.assertIn('headline="Needs a closer look: '
+                      'The boundary case in the changed component is not handled."', out)
+
+    def test_reports_an_unparsable_headline_instead_of_crashing(self):
+        out = self.report([review(HEAD, body=OVERVIEW_NO_HEADLINE)])
+        self.assertIn("headline=UNPARSABLE", out)
+
+    def test_prints_body_only_count_as_its_own_field(self):
+        out = self.report([review(HEAD, body=OVERVIEW_TABLE_ONLY_FINDING)])
+        self.assertIn("inline=0 suppressed=none body_only=1", out)
+
+    def test_body_only_is_not_applicable_without_the_overview_layout(self):
+        self.assertIn("body_only=n/a", self.report([review(HEAD, body=BENIGN)]))
+
+    def test_names_the_reasons_in_the_triage_line(self):
+        out = self.report([review(HEAD, body=OVERVIEW_HEADLINE_CONCERN)])
+        self.assertIn("TRIAGE REQUIRED", out)
+        self.assertIn("Needs a closer look", out.splitlines()[-1])
 
 
 class ErrorPathTests(unittest.TestCase):
@@ -349,6 +744,107 @@ class ParserTests(unittest.TestCase):
         count, findings, _, _ = signals.parse_suppressed(BENIGN + "\n" + SUPPRESSED_TWO)
         self.assertEqual(count, 2)
         self.assertEqual(len(findings), 2)
+
+    def test_parses_label_inside_review_details_body(self):
+        """The label is a heading in the block body, not the <summary>."""
+        count, findings, labels, undeclared = signals.parse_suppressed(REVIEW_DETAILS_SUPPRESSED)
+        self.assertEqual(count, 1)
+        self.assertFalse(undeclared)
+        self.assertTrue(labels)
+        self.assertEqual([path for path, _ in findings],
+                         ["src/components/FeatureCard/index.tsx:35"])
+
+    def test_bold_metadata_rows_are_not_findings(self):
+        """**Files reviewed:** and **Previously missed (N)** share the bold markup
+        with the file paths but are not paths, so they must not be counted."""
+        _, findings, _, _ = signals.parse_suppressed(REVIEW_DETAILS_SUPPRESSED)
+        self.assertEqual(len(findings), 1)
+
+    def test_review_details_mentioning_suppress_is_not_suppressed(self):
+        count, findings, labels, _ = signals.parse_suppressed(
+            REVIEW_DETAILS_CLEAN_MENTIONS_SUPPRESS)
+        self.assertIsNone(count)
+        self.assertEqual(findings, [])
+        self.assertEqual(labels, [])
+
+
+class OverviewParserTests(unittest.TestCase):
+    def test_body_without_the_marker_is_not_an_overview(self):
+        self.assertIsNone(signals.parse_overview(REVIEW_DETAILS_SUPPRESSED, inline=0))
+
+    def test_extracts_verdict_and_sentence_without_the_emoji(self):
+        overview = signals.parse_overview(OVERVIEW_HEADLINE_CONCERN, inline=0)
+        self.assertEqual(overview.verdict, "Needs a closer look")
+        self.assertEqual(overview.sentence,
+                         "The boundary case in the changed component is not handled.")
+
+    def test_known_clean_sample_has_no_reasons(self):
+        overview = signals.parse_overview(OVERVIEW_CLEAN, inline=0)
+        self.assertEqual(overview.reasons, [])
+        self.assertEqual(overview.body_only, 0)
+
+    def test_counts_review_findings_list_items(self):
+        overview = signals.parse_overview(OVERVIEW_REVIEW_FINDINGS_LIST, inline=0)
+        self.assertEqual(overview.body_only, 2)
+
+    def test_table_only_finding_is_the_surplus_over_open(self):
+        overview = signals.parse_overview(OVERVIEW_TABLE_ONLY_FINDING, inline=0)
+        self.assertEqual((overview.declared, overview.open_count, overview.body_only),
+                         (2, 2, 1))
+
+    def test_previously_missed_findings_count_as_body_only(self):
+        body = OVERVIEW_CLEAN + PREVIOUSLY_MISSED_BLOCK.format(count=2)
+        self.assertEqual(signals.parse_overview(body, inline=0).body_only, 2)
+
+    def test_one_finding_in_both_list_and_table_counts_once(self):
+        overview = signals.parse_overview(OVERVIEW_FINDING_IN_LIST_AND_TABLE, inline=0)
+        self.assertEqual(overview.body_only, 1)
+
+    def test_table_findings_beyond_the_list_still_count(self):
+        """The list is not assumed to be complete: the larger section wins."""
+        body = OVERVIEW_FINDING_IN_LIST_AND_TABLE.replace(
+            "(2 votes). |\n", "(2 votes). |\n| `src/b.ts` | Change. Issue: a retry has no cap (1 vote). |\n")
+        self.assertEqual(signals.parse_overview(body, inline=0).body_only, 2)
+
+    def test_inline_threads_account_for_body_findings(self):
+        """Inline comments are already triage-required; they also stop the same
+        finding from being counted twice as body-only."""
+        overview = signals.parse_overview(OVERVIEW_REVIEW_FINDINGS_LIST, inline=3)
+        self.assertEqual(overview.body_only, 0)
+
+    def test_a_sentence_off_the_allow_list_is_a_reason(self):
+        """Clean verdict, so the sentence check (an elif under it) actually runs."""
+        overview = signals.parse_overview(OVERVIEW_CLEAN_VERDICT_WITH_NIT, inline=0)
+        self.assertTrue(any("known-clean sentence" in reason for reason in overview.reasons))
+
+    def test_nested_resolved_section_contributes_no_body_only(self):
+        overview = signals.parse_overview(OVERVIEW_CLEAN_NESTED_RESOLVED, inline=0)
+        self.assertEqual(overview.body_only, 0)
+
+    def test_a_non_resolved_nested_section_still_counts_its_findings(self):
+        """The whole-range exclusion applies only to resolved sections: a kept
+        section's nested vote tags are still counted."""
+        body = OVERVIEW_CLEAN_NESTED_RESOLVED.replace(
+            "2 resolved since last review", "2 open findings")
+        self.assertEqual(signals.parse_overview(body, inline=0).body_only, 2)
+
+    def test_resolved_word_without_the_full_label_still_counts_its_findings(self):
+        """The whole-block exclusion is scoped to a resolved-since-last-review
+        section, not any summary containing "resolved"."""
+        overview = signals.parse_overview(OVERVIEW_RESOLVED_WORD_WITH_OPEN_FINDING, inline=0)
+        self.assertEqual(overview.body_only, 1)
+
+    def test_a_future_marker_version_is_parsed_but_never_clean(self):
+        """The layout is verified for v2 only. A later version can move findings
+        somewhere this parser does not read, so a clean-looking v3 body is not
+        evidence of anything."""
+        body = OVERVIEW_CLEAN.replace("ccr-overview-v2", "ccr-overview-v3")
+        overview = signals.parse_overview(body, inline=0)
+        self.assertIsNotNone(overview)
+        self.assertTrue(any("v3" in reason for reason in overview.reasons))
+
+    def test_the_verified_marker_version_adds_no_reason(self):
+        self.assertEqual(signals.parse_overview(OVERVIEW_CLEAN, inline=0).reasons, [])
 
 
 class ArgumentTests(unittest.TestCase):

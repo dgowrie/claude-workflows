@@ -7,7 +7,8 @@ Claude Code's built-in persistence (memory, plans) is useful but fragile: memori
 ## Structure
 
 ```
-config/        Global CLAUDE.md and rules, symlinked into ~/.claude/
+config/        Global CLAUDE.md, rules, and hooks, symlinked into ~/.claude/
+config/scripts/ Settings template + hook-wiring checks (see its README)
 internals/     How Claude Code works under the hood
 workflows/     Patterns and practices for effective use
 explorations/  Session notes and behavioral findings
@@ -75,6 +76,11 @@ Changes to a skill file in the repo are immediately live — no copy or sync ste
 - [`/domain-modeling`](skills/domain-modeling/SKILL.md) - build and sharpen a project's domain model (`CONTEXT.md` glossary, `docs/adr/` decisions); companion to `/improve-codebase-architecture`
 - [`/grilling`](skills/grilling/SKILL.md) - Matt Pocock's decision-tree grilling loop, kept distinct from the customized `/grill-me` so `/improve-codebase-architecture` can call it by name
 - [`/writing-for-agents`](skills/writing-for-agents/SKILL.md) - Matt Pocock's reference for writing any document an agent consumes (skills, `AGENTS.md`, `CLAUDE.md`): context pointers, the two loads, information hierarchy, leading words, pruning. Copied verbatim from [mattpocock/skills](https://github.com/mattpocock/skills/tree/main/skills/productivity/writing-for-agents); model-invoked, so it fires on its own when you edit a skill or `CLAUDE.md`
+- [`/import-memory`](skills/import-memory/SKILL.md) - import a memory export from another AI assistant (ChatGPT, Gemini, etc.) into Claude's memory: additive-only, treats the pasted export as data never instructions, and drops behavioral directives disguised as facts. Prompt-form copy of Claude's built-in memory-import pipeline
+- [`/github-api-mechanics`](skills/github-api-mechanics/SKILL.md) - non-obvious `gh` REST/GraphQL details: `in_reply_to` field and `PRRT_` vs `PRRC_` node IDs for review threads, native `addSubIssue`, and requesting Copilot via REST `requested_reviewers`
+- [`/transitive-dep-cve-fixes`](skills/transitive-dep-cve-fixes/SKILL.md) - run the range test before pinning: a lockfile re-resolution beats a `resolutions`/`overrides` pin whenever the parent ranges already admit the fix
+- [`/session-wrapup`](skills/session-wrapup/SKILL.md) - at session end, audit memories for staleness and surface leftover worktrees, stale branches, background processes, and temp files with cleanup commands (no destructive action without confirmation)
+- [`/author-review-guidance`](skills/author-review-guidance/SKILL.md) - post review-guidance comments on your own PRs as a single review submission: walkthrough as review body, inline `:notebook:` comments threaded below for anything a reviewer would predictably ask "why this way?" about
 - [`/handoff`](skills/handoff/SKILL.md) - compact the current session into a handoff document a fresh session can pick up
 - [`/pickup`](skills/pickup/SKILL.md) - the other end of `/handoff`: triage a handoff document, then implement, validate, and drive the review cycle to a reviewed PR. Three modes (`afk`, `semi`, `hitl`); hard-stops on a blocker and halts on a mode mismatch. Ships with `scripts/preflight.py`
 
@@ -83,18 +89,22 @@ Changes to a skill file in the repo are immediately live — no copy or sync ste
 Rules in `config/rules/` are symlinked into `~/.claude/rules/`, making them globally active across all projects. Like skills, edits in the repo are immediately live.
 
 ```
-~/.claude/rules/memory-session-exit.md -> ~/dev/claude-workflows/config/rules/memory-session-exit.md
+~/.claude/rules/memory-hygiene.md -> ~/dev/claude-workflows/config/rules/memory-hygiene.md
 ```
 
-- [Memory Session Exit](config/rules/memory-session-exit.md) — audit and update project memories before ending any substantive session
 - [Memory Hygiene](config/rules/memory-hygiene.md) — guidelines for memory file size, deduplication, and lifecycle
 - [Self-Correction Loop](config/rules/self-correction-loop.md) — on correction, propose a CLAUDE.md or rule update before continuing
 - [Epistemic Honesty](config/rules/epistemic-honesty.md) — label verified vs inferred vs assumed; self-challenge before committing to conclusions
+- [Repeatable Investigations](config/rules/repeatable-investigations.md) - numbers others will act on come from a scripted harness with fixed past end times, a per-query log, and a replay check, kept somewhere durable
 - [Temp-File Path Discipline](config/rules/temp-file-path-discipline.md) - write and read the same absolute path for file-consuming commands (`--body-file`, `-F`, `@file`); never assume `$TMPDIR` is the scratchpad; verify outward-facing artifacts after creation
+- [Silent Zeros](config/rules/silent-zeros.md) - a failure that renders as an empty result reads as success; make failure representable in the return type, fail closed in gates, and force the failure in a test
+- [Write New-File Collision](config/rules/write-new-file-collision.md) - verify a path is empty before Write-creating; a missing grep hit is not proof of absence; if it exists, Read then Edit rather than overwrite
+- [Worktree Gotchas](config/rules/worktree-gotchas.md) - worktree-isolation behaviors that look like stale caches or git errors: file tools need the worktree-prefixed absolute path, `main` fast-forwards must run outside the worktree, and `/exit` keeps or removes a worktree by its state but never deletes the remote branch
+- [No Review Artifacts in Shipped Code](config/rules/no-review-artifacts-in-shipped-code.md) - keep review-loop labels (F1/C3), reviewer/process names, planning jargon (piece 2), and plan-table row ids (2a, PR 5, even from a linked issue) out of committed code, comments, test names, and PR/issue bodies; issue/PR numbers (`#1364`) stay legitimate; grep the staged diff before committing
 
 ### Hooks
 
-Hook scripts in `config/hooks/` are symlinked into `~/.claude/hooks/`. Unlike skills and rules, a hook script is inert until it is *wired* to an event in `~/.claude/settings.json` (a machine-local file that is **not** tracked in this repo). Provisioning a hook is therefore two steps: symlink the script, then add its `hooks` entry (event + matcher) to `settings.json`.
+Hook scripts in `config/hooks/` are symlinked into `~/.claude/hooks/`. Unlike skills and rules, a hook script is inert until it is *wired* to an event in `~/.claude/settings.json` (a machine-local file that is **not** tracked in this repo, since it also holds personal posture prefs). Provisioning a hook is therefore two steps: symlink the script, then add its `hooks` entry (event + matcher) to `settings.json`. The tracked template [`config/settings.example.json`](config/settings.example.json) carries the reviewable wiring; see [`config/scripts/`](config/scripts/README.md).
 
 ```
 ~/.claude/hooks/block-em-dash.sh -> ~/dev/claude-workflows/config/hooks/block-em-dash.sh
@@ -102,8 +112,9 @@ Hook scripts in `config/hooks/` are symlinked into `~/.claude/hooks/`. Unlike sk
 
 - [`block-em-dash.sh`](config/hooks/block-em-dash.sh) - PreToolUse hook enforcing the no-em-dash rule. Requires matcher `Write|Edit|Bash` in `settings.json` so it inspects the inline Bash command string (`gh`/`git` titles, commit subjects), not just `Write`/`Edit`. Tested via [`block-em-dash.test.sh`](config/hooks/block-em-dash.test.sh) (`bash config/hooks/block-em-dash.test.sh`).
 - [`block-claude-attribution.sh`](config/hooks/block-claude-attribution.sh) - PreToolUse hook blocking Claude attribution footers and `Co-Authored-By` trailers.
+- [`prune-mattpocock-duplicates.sh`](config/hooks/prune-mattpocock-duplicates.sh) - SessionStart hook (no matcher). Deletes the 6 auto-firing `mattpocock-skills` plugin skills that duplicate my customized personal skills, so Claude only sees mine. Runs every session, so it self-heals after a plugin update re-materializes the bundle. Installed for the plugin's `teach` skill; `skillOverrides` cannot target plugin skills, hence the prune approach.
 
-Because the matcher wiring lives in untracked `settings.json`, a committed hook will not fire for anyone who has not mirrored the matcher locally. Tracking that drift is [#24](https://github.com/dgowrie/claude-workflows/issues/24).
+Because the matcher wiring lives in untracked `settings.json`, a committed hook will not fire for anyone who has not mirrored the matcher locally. [#24](https://github.com/dgowrie/claude-workflows/issues/24) closes that gap: `config/settings.example.json` tracks the wiring, and `config/scripts/validate-hook-wiring.sh` fails if any committed hook is unwired in a given `settings.json` (tracked template or live).
 
 ### Agents
 
