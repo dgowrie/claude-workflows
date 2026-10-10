@@ -25,11 +25,13 @@ script must never look like it has ruled on those.
 
 Known bounds:
 
-* CODEOWNERS support covers `*`, basename globs (`*.md`), directory prefixes
-  (`skills/`), and anchored paths, with last-match-wins, and wildcards stay
-  inside one path segment as CODEOWNERS specifies. It does not implement
-  negation or the full gitignore pattern grammar. An unmatched path contributes
-  no owners rather than a wrong one, and an unreadable CODEOWNERS reports
+* CODEOWNERS matching follows the gitignore rules GitHub documents: anchoring
+  by a leading or inner `/`, directory-only patterns, `*` within one segment,
+  `**` across segments, and owner-less rules clearing ownership, with
+  last-match-wins. Negation and `[ ]` ranges are treated as GitHub treats
+  them, as not working. Under last-match-wins a missed match is not neutral,
+  since it hands the path to an earlier rule, which is why the matcher has to
+  be faithful rather than conservative. An unreadable CODEOWNERS reports
   `readable: false` rather than an empty owner list.
 * The default branch is read from `origin/HEAD`, then from an `origin/main` or
   `origin/master` ref, then from a local `main` or `master`. Only a repo with no
@@ -244,39 +246,53 @@ def git_facts(cwd):
     }
 
 
-def _matches_per_segment(pattern, path):
-    """Glob each path segment separately.
+def _segments_match(pattern_parts, path_parts):
+    """Glob segment by segment, with `**` standing for zero or more segments.
 
-    `fnmatch` on the whole path lets `*` span separators, so `docs/*.md` would
-    match `docs/sub/file.md` and name the wrong owners. Comparing segment by
-    segment confines each wildcard to its own segment.
+    Matching segment by segment confines `*` to one segment, where `fnmatch`
+    on a whole path would let it span separators. `fnmatchcase` because
+    CODEOWNERS paths are case sensitive even on a case-insensitive host.
     """
-    pattern_parts = pattern.split("/")
-    path_parts = path.split("/")
-    if len(pattern_parts) != len(path_parts):
-        return False
-    return all(
-        fnmatch.fnmatch(path_part, pattern_part)
-        for pattern_part, path_part in zip(pattern_parts, path_parts)
+    if not pattern_parts:
+        return not path_parts
+    head, rest = pattern_parts[0], pattern_parts[1:]
+    if head == "**":
+        return any(
+            _segments_match(rest, path_parts[skip:])
+            for skip in range(len(path_parts) + 1)
+        )
+    return (
+        bool(path_parts)
+        and fnmatch.fnmatchcase(path_parts[0], head)
+        and _segments_match(rest, path_parts[1:])
     )
 
 
 def _codeowners_matches(pattern, path):
-    if pattern == "*":
-        return True
-    # A leading `/` anchors the rule to the repository root. Stripping it before
-    # choosing a branch sends anchored rules down the basename path, which then
-    # claims files anywhere in the tree: `/README.md` would own
-    # `docs/README.md`. Capture the anchor before it is discarded.
-    anchored = pattern.startswith("/")
-    cleaned = pattern.lstrip("/")
-    if cleaned.endswith("/"):
-        return path.startswith(cleaned)
-    if "/" not in cleaned and not anchored:
-        return fnmatch.fnmatch(os.path.basename(path), cleaned)
-    if path.startswith(cleaned + "/"):
-        return True
-    return _matches_per_segment(cleaned, path)
+    """Whether a CODEOWNERS pattern claims `path`, by gitignore rules.
+
+    A pattern anchors to the root when it starts with `/` or has a `/` before
+    its end; otherwise it matches at any depth. A trailing `/` restricts it to
+    directories. Matching a directory claims everything beneath it, so every
+    ancestor of `path` is a candidate as well as `path` itself.
+
+    `[` is literal: GitHub documents that character ranges do not work, and
+    letting `fnmatch` treat one as a range would claim paths GitHub does not.
+    """
+    directory_only = pattern.endswith("/")
+    body = pattern.strip("/")
+    if not body:
+        return False
+    anchored = pattern.startswith("/") or "/" in body
+    pattern_parts = body.replace("[", "[[]").split("/")
+    if not anchored:
+        pattern_parts = ["**"] + pattern_parts
+    path_parts = path.strip("/").split("/")
+    last = len(path_parts) - 1 if directory_only else len(path_parts)
+    return any(
+        _segments_match(pattern_parts, path_parts[:depth])
+        for depth in range(1, last + 1)
+    )
 
 
 def codeowners_for(repo_root, paths):
@@ -315,8 +331,11 @@ def codeowners_for(repo_root, paths):
         if not line:
             continue
         fields = line.split()
-        if len(fields) < 2:
+        # Negation does not work in CODEOWNERS, so a `!` rule matches nothing.
+        if fields[0].startswith("!"):
             continue
+        # A rule with no owners is kept: it clears ownership for what it
+        # matches, so skipping it would hand those paths to an earlier rule.
         rules.append((fields[0], fields[1:]))
 
     owners = []

@@ -426,6 +426,55 @@ class Codeowners(unittest.TestCase):
         result = preflight.codeowners_for(repo, ["skills/pickup/scripts/preflight.py"])
         self.assertEqual(result["owners"], ["@skills-team"])
 
+    def owners(self, rules, path):
+        repo = make_repo()
+        (repo / "CODEOWNERS").write_text(rules)
+        return preflight.codeowners_for(repo, [path])["owners"]
+
+    def test_unanchored_directory_matches_at_any_depth(self):
+        """GitHub's `apps/` example owns an `apps` directory anywhere. Missing
+        a nested match is not harmless under last-match-wins: the earlier
+        catch-all wins instead, and the wrong team is asked to review."""
+        rules = "* @default\ndocs/ @docs\n"
+        self.assertEqual(self.owners(rules, "src/docs/a.md"), ["@docs"])
+
+    def test_double_star_matches_a_directory_at_any_depth(self):
+        rules = "* @default\n**/logs @logs\n"
+        self.assertEqual(self.owners(rules, "x/logs/y.txt"), ["@logs"])
+        self.assertEqual(self.owners(rules, "logs/y.txt"), ["@logs"])
+
+    def test_bare_name_matches_a_directory_as_well_as_a_file(self):
+        rules = "* @default\nbuild @build\n"
+        self.assertEqual(self.owners(rules, "build/out.js"), ["@build"])
+        self.assertEqual(self.owners(rules, "src/build/out.js"), ["@build"])
+        self.assertEqual(self.owners(rules, "tools/build"), ["@build"])
+
+    def test_inner_slash_anchors_the_pattern(self):
+        """Under gitignore rules a slash before the end anchors a pattern to
+        the root, so `docs/api/` must not claim `src/docs/api/`."""
+        rules = "* @default\ndocs/api/ @api\n"
+        self.assertEqual(self.owners(rules, "docs/api/x.md"), ["@api"])
+        self.assertEqual(self.owners(rules, "src/docs/api/x.md"), ["@default"])
+
+    def test_rule_without_owners_clears_ownership(self):
+        """GitHub's own example: an owner-less `/apps/github` leaves that
+        directory unowned. Skipping the line hands it to the rule above."""
+        rules = "/apps/ @octocat\n/apps/github\n"
+        self.assertEqual(self.owners(rules, "apps/github/x.js"), [])
+        self.assertEqual(self.owners(rules, "apps/other/x.js"), ["@octocat"])
+
+    def test_brackets_are_not_a_character_range(self):
+        rules = "* @default\nfile[ab].md @range\n"
+        self.assertEqual(self.owners(rules, "filea.md"), ["@default"])
+
+    def test_negation_is_not_supported(self):
+        rules = "*.md @docs\n!README.md @nobody\n"
+        self.assertEqual(self.owners(rules, "README.md"), ["@docs"])
+
+    def test_matching_is_case_sensitive(self):
+        rules = "* @default\n*.MD @shouty\n"
+        self.assertEqual(self.owners(rules, "README.md"), ["@default"])
+
     def test_undecodable_file_reports_unreadable_rather_than_no_owners(self):
         """An empty owner list must mean "no rule matched", never "the file
         could not be read". Collapsing the two is a silent zero: the run would
