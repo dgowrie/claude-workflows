@@ -57,6 +57,9 @@ def setUpModule():
         "XDG_CONFIG_HOME": empty_home,
     })
     _isolated_environment.start()
+    # `patch.dict` cannot delete keys; `stop` restores it. Left set, it
+    # overrides the remote-derived host every GhAuthState test asserts.
+    os.environ.pop("GH_HOST", None)
 
 
 def tearDownModule():
@@ -565,21 +568,65 @@ class Codeowners(unittest.TestCase):
 
 
 class GhAuthState(unittest.TestCase):
-    def auth_args(self, repo, environment=None):
-        """The `gh auth status` argv, with git real and gh stubbed."""
+    def auth_args(self, repo, environment=None, ssh_config=None):
+        """The `gh auth status` argv, with git real and gh and ssh stubbed.
+
+        `ssh` is always stubbed: `ssh -G` reads the config under the passwd
+        home, which the module's empty `HOME` does not hide. `ssh_config` is
+        what `ssh -G` prints; None makes it fail.
+        """
         real_run = preflight.run
-        calls = []
+        self.calls = []
 
         def fake_run(args, cwd, timeout=None):
-            calls.append(args)
+            self.calls.append(args)
             if args[0] == "gh":
                 return 0, ""
+            if args[0] == "ssh":
+                return (0, ssh_config) if ssh_config is not None else (255, "")
             return real_run(args, cwd, timeout)
 
         with mock.patch.dict(os.environ, environment or {}), \
              mock.patch.object(preflight, "run", side_effect=fake_run):
             preflight.gh_auth_state(repo)
-        return next(call for call in calls if call[:3] == ["gh", "auth", "status"])
+        return next(
+            call for call in self.calls if call[:3] == ["gh", "auth", "status"]
+        )
+
+    def hostname_in(self, args):
+        return args[args.index("--hostname") + 1]
+
+    def test_ssh_alias_resolves_to_its_real_host(self):
+        """gh translates an SSH alias through `ssh -G` before choosing a host,
+        so `git@github-work:...` talks to github.com. Scoping auth to the alias
+        reports a working login as unauthenticated and blocks every run."""
+        repo = make_repo()
+        git(repo, "remote", "add", "origin", "git@github-work:org/repo.git")
+        args = self.auth_args(
+            repo, ssh_config="user git\nhostname github.com\nport 22\n"
+        )
+        self.assertEqual(self.hostname_in(args), "github.com")
+
+    def test_ssh_over_port_443_maps_to_github_com(self):
+        """GitHub's documented port-443 setup uses `ssh.github.com`, which gh
+        maps back to github.com; no alias is involved."""
+        repo = make_repo()
+        git(repo, "remote", "add", "origin",
+            "ssh://git@ssh.github.com:443/org/repo.git")
+        args = self.auth_args(repo, ssh_config="hostname ssh.github.com\n")
+        self.assertEqual(self.hostname_in(args), "github.com")
+
+    def test_failed_ssh_lookup_keeps_the_parsed_host(self):
+        repo = make_repo()
+        git(repo, "remote", "add", "origin", "git@ghe.example.com:org/repo.git")
+        args = self.auth_args(repo, ssh_config=None)
+        self.assertEqual(self.hostname_in(args), "ghe.example.com")
+
+    def test_https_remote_does_not_consult_ssh(self):
+        repo = make_repo()
+        git(repo, "remote", "add", "origin", "https://github.com/org/repo.git")
+        self.auth_args(repo, ssh_config="hostname elsewhere.example\n")
+        self.assertFalse([call for call in self.calls if call[0] == "ssh"])
 
     def test_scoped_to_the_remote_host_and_active_account(self):
         """Unscoped, `gh auth status` exits 1 when any account on any host has
@@ -605,9 +652,7 @@ class GhAuthState(unittest.TestCase):
 
     def test_no_remote_defaults_to_github_com(self):
         repo = make_repo()
-        with mock.patch.dict(os.environ):
-            os.environ.pop("GH_HOST", None)
-            args = self.auth_args(repo)
+        args = self.auth_args(repo)
         self.assertEqual(args[args.index("--hostname") + 1], "github.com")
 
     def test_exit_codes_map_to_states(self):

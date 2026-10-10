@@ -83,6 +83,9 @@ GH_TIMEOUT_SECONDS = 30
 
 DEFAULT_GH_HOST = "github.com"
 
+# `ssh -G` only reads config, but config can run commands (`Match exec`).
+SSH_TIMEOUT_SECONDS = 5
+
 # The line `/pickup` writes into a PR body, and the only form resume accepts.
 # A bare substring test let `old-handoff.md` claim a run cited as `handoff.md`.
 RUN_CITATION = "Picked up from `{}`"
@@ -363,12 +366,33 @@ def codeowners_for(repo_root, paths):
     return {"file": str(root / location), "owners": owners, "readable": True}
 
 
+def _ssh_hostname(host, cwd):
+    """The real host behind an SSH alias, as gh resolves it.
+
+    Mirrors go-gh's translator: the last `hostname` line of `ssh -G <host>`,
+    the original host on any failure, and `ssh.github.com` (GitHub's port-443
+    endpoint) mapped back to github.com.
+    """
+    code, out = run(["ssh", "-G", host], cwd, timeout=SSH_TIMEOUT_SECONDS)
+    resolved = host
+    if code == 0:
+        for line in out.splitlines():
+            key, _, value = line.partition(" ")
+            if key == "hostname" and value.strip():
+                resolved = value.strip()
+    if resolved.lower() == "ssh.github.com":
+        return DEFAULT_GH_HOST
+    return resolved
+
+
 def _github_host(cwd):
     """The host `gh` will talk to for this repo.
 
-    `GH_HOST` wins, as it does for `gh` itself; then the `origin` URL, in its
-    `https://host/...`, `ssh://user@host/...`, or scp-like `user@host:path`
-    form; then github.com.
+    `GH_HOST` wins, as it does for `gh` itself, which then ignores remotes on
+    other hosts. Otherwise the `origin` URL's host, through the same SSH alias
+    translation gh applies to `ssh://` and scp-like `user@host:path` remotes;
+    otherwise github.com. Reading an alias verbatim reports a working login as
+    unauthenticated and blocks every run.
     """
     if os.environ.get("GH_HOST"):
         return os.environ["GH_HOST"]
@@ -377,9 +401,15 @@ def _github_host(cwd):
     if code != 0 or not url:
         return DEFAULT_GH_HOST
     if "://" in url:
-        return urlparse(url).hostname or DEFAULT_GH_HOST
+        parsed = urlparse(url)
+        if not parsed.hostname:
+            return DEFAULT_GH_HOST
+        if parsed.scheme == "ssh":
+            return _ssh_hostname(parsed.hostname, cwd)
+        return parsed.hostname
     if ":" in url:
-        return url.split(":", 1)[0].rsplit("@", 1)[-1] or DEFAULT_GH_HOST
+        host = url.split(":", 1)[0].rsplit("@", 1)[-1]
+        return _ssh_hostname(host, cwd) if host else DEFAULT_GH_HOST
     return DEFAULT_GH_HOST
 
 
