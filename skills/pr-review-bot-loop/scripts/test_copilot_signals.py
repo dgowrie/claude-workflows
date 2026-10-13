@@ -40,6 +40,9 @@ signals = load()
 
 HEAD = "a" * 40
 OLD = "b" * 40
+# Request-event times either side of review()'s default `when`.
+BEFORE_REVIEW = "2025-12-31T23:00:00Z"
+AFTER_REVIEW = "2026-01-01T01:00:00Z"
 
 SUPPRESSED_TWO = (
     "<details><summary>Suppressed comments (2)</summary>\n"
@@ -210,16 +213,32 @@ def review(oid, inline=0, body="", when="2026-01-01T00:00:00Z",
             "comments": {"totalCount": inline}, "body": body}
 
 
-def payload(reviews, head=HEAD, pending=()):
-    """`pending` takes logins, or (login, __typename) pairs to vary the type."""
+def payload(reviews, head=HEAD, pending=(), requested=(), requested_count=None):
+    """`pending` takes logins, or (login, __typename) pairs to vary the type.
+
+    `requested` takes request-event times, or (time, login, __typename) triples;
+    a bare time is a request for Copilot, and a None login a null reviewer.
+    `requested_count` overrides the connection's filteredCount, to simulate
+    events outside the fetched window.
+    """
     nodes = []
     for entry in pending:
         login, typename = entry if isinstance(entry, tuple) else (entry, "Bot")
         nodes.append({"requestedReviewer": {"__typename": typename, "login": login}})
+    events = []
+    for entry in requested:
+        when, login, typename = (entry if isinstance(entry, tuple)
+                                 else (entry, "copilot-pull-request-reviewer", "Bot"))
+        reviewer = None if login is None else {"__typename": typename, "login": login}
+        events.append({"createdAt": when, "requestedReviewer": reviewer})
     return {
         "headRefOid": head,
         "reviewRequests": {"nodes": nodes},
         "reviews": {"nodes": reviews},
+        "timelineItems": {
+            "filteredCount": len(events) if requested_count is None else requested_count,
+            "nodes": events,
+        },
     }
 
 
@@ -234,17 +253,18 @@ class ClassificationTests(unittest.TestCase):
         finally:
             sys.argv = argv
 
-    def verdict(self, reviews, head=HEAD, pending=()):
+    def verdict(self, reviews, head=HEAD, pending=(), **timeline):
         """Return (exit status, stdout). Patch is scoped, never left behind."""
         out = io.StringIO()
-        with mock.patch.object(signals, "fetch",
-                               lambda owner, repo, number: payload(reviews, head, pending)):
+        with mock.patch.object(
+                signals, "fetch",
+                lambda owner, repo, number: payload(reviews, head, pending, **timeline)):
             with contextlib.redirect_stdout(out):
                 code = self._run()
         return code, out.getvalue()
 
-    def assertVerdict(self, reviews, expected, head=HEAD, pending=()):
-        code, _ = self.verdict(reviews, head, pending)
+    def assertVerdict(self, reviews, expected, head=HEAD, pending=(), **timeline):
+        code, _ = self.verdict(reviews, head, pending, **timeline)
         self.assertEqual(code, expected)
 
     def test_no_review_at_head_is_not_applicable(self):
@@ -312,6 +332,117 @@ class ClassificationTests(unittest.TestCase):
             [review(HEAD, when="2026-01-02T00:00:00Z"),
              review(HEAD, body=SUPPRESSED_TWO, when="2026-01-01T00:00:00Z")],
             signals.CLEAN)
+
+    # A re-request with no push leaves the previous review at head. Until the new
+    # one lands, that review answers an older request, and reporting its verdict
+    # as current is how a description-only fix read as already reviewed.
+
+    def test_pending_rerequest_hides_the_previous_review_at_head(self):
+        self.assertVerdict([review(HEAD)], signals.NOT_APPLICABLE,
+                           pending=["copilot-pull-request-reviewer"],
+                           requested=[BEFORE_REVIEW, AFTER_REVIEW])
+
+    def test_review_answering_the_latest_request_keeps_its_verdict(self):
+        self.assertVerdict([review(HEAD)], signals.CLEAN,
+                           requested=[BEFORE_REVIEW])
+
+    def test_answered_request_does_not_mask_a_triage_verdict(self):
+        self.assertVerdict([review(HEAD, body=SUPPRESSED_TWO)], signals.TRIAGE_REQUIRED,
+                           requested=[BEFORE_REVIEW])
+
+    def test_request_after_the_review_is_unanswered_even_with_nothing_pending(self):
+        """A request removed before Copilot answered it reads as not pending."""
+        self.assertVerdict([review(HEAD)], signals.NOT_APPLICABLE,
+                           requested=[AFTER_REVIEW])
+
+    def test_latest_request_wins_whatever_order_the_timeline_lists(self):
+        self.assertVerdict([review(HEAD)], signals.NOT_APPLICABLE,
+                           requested=[AFTER_REVIEW, BEFORE_REVIEW])
+
+    def test_newer_review_at_head_answers_the_request_an_older_one_did_not(self):
+        self.assertVerdict(
+            [review(HEAD, body=SUPPRESSED_TWO, when=BEFORE_REVIEW),
+             review(HEAD, when=AFTER_REVIEW)], signals.CLEAN,
+            requested=["2026-01-01T00:30:00Z"])
+
+    def test_request_in_the_same_second_as_the_review_is_unanswered(self):
+        """Timestamps have one-second resolution, so a tie cannot be ordered.
+
+        Re-requesting costs one extra review cycle; reading a stale review as
+        current is the defect this gate exists to prevent.
+        """
+        self.assertVerdict([review(HEAD)], signals.NOT_APPLICABLE,
+                           requested=["2026-01-01T00:00:00Z"])
+
+    def test_no_request_events_keeps_the_review_verdict(self):
+        """A review the bot ran on its own may have no request event behind it."""
+        self.assertVerdict([review(HEAD)], signals.CLEAN, requested=[])
+
+    def test_pending_request_with_no_request_event_is_not_applicable(self):
+        """The two surfaces disagree, so neither can clear the review."""
+        self.assertVerdict([review(HEAD)], signals.NOT_APPLICABLE,
+                           pending=["copilot-pull-request-reviewer"])
+
+    def test_pending_request_wins_over_a_review_newer_than_every_request_event(self):
+        """Fail closed when the pending flag and the timeline disagree.
+
+        A flag that never clears costs waits up to the round cap; trusting the
+        timeline here would read the stale review as current if a request path
+        ever stops emitting events.
+        """
+        self.assertVerdict([review(HEAD)], signals.NOT_APPLICABLE,
+                           pending=["copilot-pull-request-reviewer"],
+                           requested=[BEFORE_REVIEW])
+
+    def test_human_request_after_the_review_is_not_a_copilot_request(self):
+        self.assertVerdict([review(HEAD)], signals.CLEAN, requested=[
+            BEFORE_REVIEW, (AFTER_REVIEW, "some-human", "User")])
+
+    def test_human_lookalike_request_after_the_review_is_not_a_copilot_request(self):
+        """Same two conditions as the review and pending filters."""
+        self.assertVerdict([review(HEAD)], signals.CLEAN, requested=[
+            BEFORE_REVIEW, (AFTER_REVIEW, "copilotfan", "User")])
+
+    def test_human_lookalike_pending_request_does_not_hide_the_review(self):
+        self.assertVerdict([review(HEAD)], signals.CLEAN,
+                           pending=[("copilotfan", "User")], requested=[BEFORE_REVIEW])
+
+    def test_request_event_with_no_reviewer_is_ignored(self):
+        """requestedReviewer is nullable; it is null for a reviewer the token cannot
+        see, such as a team in an org it cannot read."""
+        self.assertVerdict([review(HEAD)], signals.CLEAN,
+                           requested=[BEFORE_REVIEW, (AFTER_REVIEW, None, None)])
+
+    def test_complete_window_with_only_human_requests_keeps_the_review_verdict(self):
+        """No Copilot event in a window that holds every event proves there is none."""
+        self.assertVerdict([review(HEAD)], signals.CLEAN,
+                           requested=[(AFTER_REVIEW, "some-human", "User")])
+
+    def test_author_reply_after_the_request_does_not_make_the_stale_review_current(self):
+        """Only Copilot's own review can answer its request.
+
+        Comparing against the newest review of any author would let one of our
+        `:zap:` reply artifacts clear a stale review, which reads as CLEAN.
+        """
+        self.assertVerdict(
+            [review(HEAD),
+             review(HEAD, login="dgowrie", typename="User", when="2026-01-01T02:00:00Z")],
+            signals.NOT_APPLICABLE, requested=[AFTER_REVIEW])
+
+    def test_truncated_window_without_a_copilot_request_is_not_applicable(self):
+        """A full window may hold none of Copilot's requests while one exists.
+
+        The fetched window is the newest events, so a Copilot request found in it
+        is the latest one; finding none only proves something when the window
+        holds every event.
+        """
+        self.assertVerdict([review(HEAD)], signals.NOT_APPLICABLE,
+                           requested=[(AFTER_REVIEW, "some-human", "User")],
+                           requested_count=51)
+
+    def test_truncated_window_with_a_copilot_request_still_decides(self):
+        self.assertVerdict([review(HEAD)], signals.CLEAN,
+                           requested=[BEFORE_REVIEW], requested_count=51)
 
     def test_stale_clean_review_does_not_override_newer_dirty_one(self):
         self.assertVerdict(
@@ -586,8 +717,8 @@ class ReportTests(unittest.TestCase):
     failure mode is a watcher that waits through a landed review.
     """
 
-    def report(self, reviews, head=HEAD, pending=()):
-        return ClassificationTests.verdict(self, reviews, head, pending)[1]
+    def report(self, reviews, head=HEAD, pending=(), **timeline):
+        return ClassificationTests.verdict(self, reviews, head, pending, **timeline)[1]
 
     _run = ClassificationTests._run
 
@@ -616,6 +747,65 @@ class ReportTests(unittest.TestCase):
             ("copilotfan", "User"), ("copilot-pull-request-reviewer", "Bot")])
         self.assertIn("copilot-pull-request-reviewer", out)
         self.assertNotIn("copilotfan", out)
+
+    def test_reports_the_latest_copilot_request(self):
+        out = self.report([review(HEAD)], requested=[
+            BEFORE_REVIEW, AFTER_REVIEW, ("2026-01-02T00:00:00Z", "some-human", "User")])
+        self.assertIn(f"requested {AFTER_REVIEW}", out.splitlines()[2])
+
+    def test_reports_no_request_event(self):
+        self.assertIn("requested none", self.report([review(HEAD)]).splitlines()[2])
+
+    def test_reports_a_request_outside_the_window_as_unknown(self):
+        out = self.report([review(HEAD)], requested=[(AFTER_REVIEW, "some-human", "User")],
+                          requested_count=51)
+        self.assertIn("requested UNKNOWN", out.splitlines()[2])
+
+    def test_unanswered_request_says_why_the_review_at_head_does_not_count(self):
+        """Distinct from "no review at head", which sends the loop to re-request."""
+        last = self.report([review(HEAD)], requested=[AFTER_REVIEW]).splitlines()[-1]
+        self.assertIn("NOT APPLICABLE", last)
+        self.assertIn("is not newer than the latest Copilot request", last)
+
+    def pending_last_line(self, **timeline):
+        return self.report([review(HEAD)], pending=["copilot-pull-request-reviewer"],
+                           **timeline).splitlines()[-1]
+
+    def assertSaysWait(self, last):
+        """A pending request must never print a re-request instruction.
+
+        The pending gate has to run before the timeline checks: below them, the
+        reported shape still exits 2 but tells the agent "Nothing is pending:
+        re-request", which is the double-request trap.
+        """
+        self.assertIn("NOT APPLICABLE", last)
+        self.assertIn("request is pending", last)
+        self.assertNotIn("re-request", last)
+
+    def test_pending_request_with_a_newer_request_event_says_wait(self):
+        last = self.pending_last_line(requested=[AFTER_REVIEW])
+        self.assertSaysWait(last)
+        self.assertIn("answers an earlier one", last)
+
+    def test_pending_request_with_a_truncated_window_says_wait(self):
+        self.assertSaysWait(self.pending_last_line(
+            requested=[(AFTER_REVIEW, "some-human", "User")], requested_count=51))
+
+    def test_pending_flag_with_a_review_newer_than_every_request_says_it_may_be_stale(self):
+        """The flag alone cannot show the review is stale, so do not claim it is.
+
+        If the flag never clears, the loop reaches max_rounds here, and the
+        report is the only place a reader learns the flag itself may be stuck.
+        """
+        last = self.pending_last_line(requested=[BEFORE_REVIEW])
+        self.assertSaysWait(last)
+        self.assertIn("may be stale", last)
+        self.assertNotIn("answers an earlier one", last)
+
+    def test_pending_flag_with_no_request_event_says_it_may_be_stale(self):
+        last = self.pending_last_line()
+        self.assertSaysWait(last)
+        self.assertIn("may be stale", last)
 
     def test_reports_head_and_each_review(self):
         out = self.report([review(OLD), review(HEAD, inline=2)])
