@@ -76,11 +76,16 @@ sequentially:
 | --- | --- | --- |
 | `pr` | PR URL or number | required |
 | `poll` | Seconds between wakeups | `90` |
-| `max_rounds` | Hard backstop on loop rounds | `5` |
-| `nit_rounds` | Consecutive trivial-only rounds before surfacing it to the user | `2` |
+| `max_rounds` | Hard backstop on loop rounds; a poll that only waits counts as a round | `15` |
+| `nit_rounds` | Consecutive reviews at head with only trivial findings before surfacing it to the user | `2` |
 
 All four are parameters. Reading them from the invocation is the point; a hardcoded poll interval
 is what makes a loop expensive on a fast bot and blind on a slow one.
+
+The `max_rounds` default is about five reviews, the size of the measured PRs, at roughly three
+rounds each at the default `poll`: the round that re-requests, a wait, and the round that reads
+the verdict. The measured counts elsewhere in this skill ("five rounds", "a 5-round PR") count
+reviews, not polls.
 
 Confirm authorship before the first round: compare `author.login` from `gh pr view` against
 `gh api user --jq .login`. Use `dangerouslyDisableSandbox: true` for `gh` (corporate proxy TLS).
@@ -96,7 +101,7 @@ version terminates early and ships defects (see The suppressed signal).
 | --- | --- |
 | `re-request` | Ask the bot to review the current head |
 | `pending?` | Is a request outstanding right now |
-| `landed?` | Does a review exist whose commit is the current head |
+| `landed?` | Does a current review exist: its commit is the head and it answers the latest request |
 | `clean?` | Did that review post actionable comments |
 | `suppressed?` | Did that review withhold findings it judged low-confidence |
 
@@ -120,9 +125,9 @@ working directory, which is usually not this repo. The repo-relative paths furth
 deliberate, and they apply only when you are editing the detector itself.
 
 Exit `0` clean, `1` triage-required, `2` not-applicable, `3` error. It prints the pending request,
-every Copilot review with its commit, inline count, and suppressed findings. Exit `3` is a signal
-that the query failed, so it carries **no verdict**; fix it and re-run rather than reading it as any
-of the other three.
+the latest Copilot request time, and every Copilot review with its commit, inline count, and
+suppressed findings. Exit `3` is a signal that the query failed, so it carries **no verdict**; fix
+it and re-run rather than reading it as any of the other three.
 
 The remaining signals are single commands:
 
@@ -133,7 +138,7 @@ The remaining signals are single commands:
 | `pending?` | GraphQL `reviewRequests`, which the script already reports |
 | `clean?` corroboration | review `bodyText` contains "generated no new comments"; zero review threads created after its `submittedAt` |
 
-Four traps, each measured, each of which silently breaks a loop built without it:
+Five traps, each measured, each of which silently breaks a loop built without it:
 
 - **GraphQL is the only surface that shows a pending Copilot request.** Both `gh pr view --json
   reviewRequests` and REST `/pulls/{n}/requested_reviewers` return empty while one is outstanding.
@@ -150,9 +155,16 @@ Four traps, each measured, each of which silently breaks a loop built without it
 - **Reviews authored by the PR author are artifacts, not verdicts.** Every `:zap:` thread reply
   posted over REST creates an empty-bodied `COMMENTED` review under your own login. Filter to the
   bot before reading any verdict.
+- **A re-request without a push leaves the previous review at head.** Fixing a finding by editing
+  the PR description and re-requesting changes no commit, so until the new review lands a
+  head-scoped check returns the old review's verdict as current. The script counts a review only
+  when nothing is pending and it was submitted after the latest Copilot `ReviewRequestedEvent` in
+  the PR timeline. Either surface alone can be wrong, so both must agree.
 
 Round latency was roughly 90 seconds to 2 minutes across the measured rounds, which is why `poll`
-defaults to 90 rather than the 3-to-7-minute figure in older notes.
+defaults to 90 rather than the 3-to-7-minute figure in older notes. Later rounds ran longer: request
+to review took 2:21 to 3:41 across all 21 requests on a PR measured in 2026-10, so at the default
+`poll` a review usually takes one or two wait polls before the verdict.
 
 ---
 
@@ -171,9 +183,9 @@ It is three-state. Collapsing it to a boolean is a bug in opposite directions.
 
 | State | Condition | Loop action |
 | --- | --- | --- |
-| clean | review at head, nothing posted and nothing suppressed | terminate |
-| triage-required | review at head, and any of: inline comments non-zero, suppressed count non-zero or unparsable, or an overview body that is not a known-clean verdict and known-clean sentence with nothing else in it | triage whatever it reported, posted or withheld, then fix, push, re-request |
-| not-applicable | no review at head | re-request, or wait if one is pending |
+| clean | current review at head, nothing posted and nothing suppressed | terminate |
+| triage-required | current review at head, and any of: inline comments non-zero, suppressed count non-zero or unparsable, or an overview body that is not a known-clean verdict and known-clean sentence with nothing else in it | triage whatever it reported, posted or withheld, then fix, push, re-request |
+| not-applicable | no current review at head: none at head, a Copilot request pending, the one there not newer than the latest Copilot request, or a truncated request window holding no Copilot request | re-request, or wait if one is pending |
 
 - **Scope the check to the review at `headRefOid`.** A detector that scans every review on the PR
   stays dirty forever, because an already-fixed round's suppressed block remains in the history
@@ -286,13 +298,15 @@ Each round:
    one of them is, go to Termination. Exit `1` is computed from what the review says, not from what
    you did about it, so declining a finding leaves it at `1` forever; without this clause the loop
    re-triages the same findings until `max_rounds`.
-2. **Re-request when no review exists at head and nothing is pending against it.** A request already
-   in flight means wait, not re-request; that gate is what keeps you off the double-request trap.
-   Head-scoping already encodes "the current commit is unreviewed", so there is no separate
-   new-commit condition to check, and the entry case of a PR the bot has never seen qualifies.
+2. **On exit `2`, re-request unless the `pending` line shows a request** (anything but `pending
+   none`). A request already in flight means wait, not re-request; that gate is what keeps you off
+   the double-request trap. Exit `2` already encodes "no current review at head", so there is no
+   separate new-commit or request-time condition to check, and the entry case of a PR the bot has
+   never seen qualifies.
 3. **Wait** before polling again. Under `/loop` dynamic mode, use `ScheduleWakeup` at `poll`.
    Otherwise run the poll as a background shell command; foreground `sleep` is blocked in this
-   harness. Conclude nothing from the wait itself.
+   harness. Conclude nothing from the wait itself. A poll that only waits still counts as a round
+   toward `max_rounds`, so a request that never resolves stops the loop instead of parking it.
 4. **Triage every finding, posted and suppressed together.** Route them through
    `/pr-review-adversarial` Phase 2 rather than acting on them directly. Low-confidence items are
    exactly where a refuter earns its cost: of 7 suppressed issues on the measured PR, 2 rested on
@@ -343,11 +357,14 @@ drained, and the largest round was the third. A loop whose stopping condition is
 quiet" may not have a fixed point, so the judgment call is the condition and the round cap is what
 makes it terminate regardless.
 
-When `nit_rounds` consecutive rounds produce only trivial findings, surface that to the user and
-keep going. Hitting `max_rounds` stops the loop and is a result to report, not a failure to retry.
+When `nit_rounds` consecutive reviews at head produce only trivial findings, surface that to the
+user and keep going; rounds that only wait or re-request neither extend nor reset the streak.
+Hitting `max_rounds` stops the loop and is a result to report, not a failure to retry. If it stops
+while the script says a pending flag may be stale, report the stuck request; do not re-request over
+it.
 
-Report the outcome as a readiness statement: rounds run, findings accepted and declined per round,
-and the terminating state.
+Report the outcome as a readiness statement: rounds run, reviews received, findings accepted and
+declined per review, and the terminating state.
 
 **Split the finding count by surface**, code against procedure, rather than asserting what the pass
 was worth. The claim "no automated objection" is not readable on its own; "7 findings on the code,
