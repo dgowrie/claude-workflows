@@ -77,7 +77,7 @@ sequentially:
 | `pr` | PR URL or number | required |
 | `poll` | Seconds between wakeups | `90` |
 | `max_rounds` | Hard backstop on loop rounds; a poll that only waits counts as a round | `15` |
-| `nit_rounds` | Consecutive reviews at head with only trivial findings before surfacing it to the user | `2` |
+| `nit_rounds` | Consecutive current reviews with only trivial findings before surfacing it to the user | `2` |
 
 All four are parameters. Reading them from the invocation is the point; a hardcoded poll interval
 is what makes a loop expensive on a fast bot and blind on a slow one.
@@ -161,10 +161,10 @@ Five traps, each measured, each of which silently breaks a loop built without it
   when nothing is pending and it was submitted after the latest Copilot `ReviewRequestedEvent` in
   the PR timeline. Either surface alone can be wrong, so both must agree.
 
-Round latency was roughly 90 seconds to 2 minutes across the measured rounds, which is why `poll`
-defaults to 90 rather than the 3-to-7-minute figure in older notes. Later rounds ran longer: request
-to review took 2:21 to 3:41 across all 21 requests on a PR measured in 2026-10, so at the default
-`poll` a review usually takes one or two wait polls before the verdict.
+Review latency was roughly 90 seconds to 2 minutes across the measured reviews, which is why `poll`
+defaults to 90 rather than the 3-to-7-minute figure in older notes. Later reviews took longer:
+request to review took 2:21 to 3:41 across all 21 requests on a PR measured in 2026-10, so at the
+default `poll` a review usually takes one or two wait polls before the verdict.
 
 ---
 
@@ -261,7 +261,8 @@ suppressed finding is dispositioned, which is the same split the loop uses for a
 finding: the commit message that fixes it, or a PR comment when you decline it. Either records it
 where the detector's inputs live, so exit `1` on that headline alone can end the loop under step 1.
 When a headline concern has no counterpart in the code, check the PR description first; a stale
-description produces headline findings by itself.
+description produces headline findings by itself. Fixing one there changes no commit, so step 6
+re-requests explicitly.
 
 **Validate a detector against a known-positive PR, and across a state transition.** Both parser
 traps and both scoping traps were found by running the thing against PRs whose answers were already
@@ -315,14 +316,19 @@ Each round:
 6. **Validate, then push.** If the package manager launcher fails on an engine mismatch, run the
    underlying tools directly (`npx tsc --build`, `npx vitest run`, `npx eslint . --max-warnings=0`);
    a launcher that will not start is a reason to reach past it, never a reason to skip validation.
+   If you fixed an accepted finding without a commit (for example a PR description edit) and pushed
+   nothing this round, re-request now. Without a push the old review stays current, so exit `1`
+   would persist. The next poll normally reads exit `2` with the request pending, which step 2
+   treats as wait.
 7. **Reply to the threads** you acted on, then loop.
 
-A push moves head, which makes the next signal read `not-applicable` and sends you to step 2. The
-detector drives the loop; you do not track round state separately. The one thing it cannot tell you
-is whether you already dispositioned a finding, so record that where the detector's own inputs live:
-a published `:zap:` or `:thought_balloon:` reply on the thread, and for a suppressed finding, which
-has no thread, the commit message that fixed it or a PR comment declining it. Disposition then lives
-on the PR rather than in session memory, and a fresh session picks the loop up mid-flight.
+A push, or a re-request after a commit-free fix, makes the next signal read `not-applicable` and
+sends you to step 2. The detector drives the loop; you do not track round state separately. The one
+thing it cannot tell you is whether you already dispositioned a finding, so record that where the
+detector's own inputs live: a published `:zap:` or `:thought_balloon:` reply on the thread, and for
+a suppressed finding, which has no thread, the commit message that fixed it or a PR comment
+declining it. Disposition then lives on the PR rather than in session memory, and a fresh session
+picks the loop up mid-flight.
 
 ### Thread hygiene
 
@@ -357,7 +363,7 @@ drained, and the largest round was the third. A loop whose stopping condition is
 quiet" may not have a fixed point, so the judgment call is the condition and the round cap is what
 makes it terminate regardless.
 
-When `nit_rounds` consecutive reviews at head produce only trivial findings, surface that to the
+When `nit_rounds` consecutive current reviews produce only trivial findings, surface that to the
 user and keep going; rounds that only wait or re-request neither extend nor reset the streak.
 Hitting `max_rounds` stops the loop and is a result to report, not a failure to retry. If it stops
 while the script says a pending flag may be stale, report the stuck request; do not re-request over
@@ -404,7 +410,7 @@ head.
 
 - **Cost is wall clock, not tokens.** A round is one script run, one wakeup, and whatever the fixes
   need. The expensive part is step 4's adversarial dispatch, at `1 + ceil(candidates / 10)`
-  subagents per round.
+  subagents per triaged review.
 - **The parser is pattern-matched against an undocumented format.** Copilot's body markup is not an
   API. It has already changed label once. When the parsed finding count disagrees with the declared
   count the script warns and you read the body directly; treat that warning as the format having
