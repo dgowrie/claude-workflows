@@ -8,14 +8,22 @@ the corroborating detail for the rest.
 
 Exit status is the three-state `landed? + suppressed?` result:
 
-    0  clean            review at head, no inline comments, nothing suppressed
-    1  triage-required  review at head withheld or posted findings
-    2  not-applicable   no review at head; re-request, or wait if one is pending
+    0  clean            current review at head, no inline comments, nothing suppressed
+    1  triage-required  current review at head withheld or posted findings
+    2  not-applicable   no current review at head; re-request, or wait if one is
+                        pending
     3  error            the query or the arguments failed; no verdict
 
 `landed?` and `suppressed?` cannot be answered independently: with no review at
 head there is nothing to suppress, so a head-scoped suppressed check reports the
 same zero for "clean" and for "never reviewed". Exit 2 keeps them distinct.
+
+A review at head is not always the current one. Re-requesting without a push
+leaves the previous review at head until the new one lands, so a review counts
+only when no Copilot request is pending and it was submitted after the latest
+Copilot request event. With no Copilot request event in a complete timeline, the
+pending check alone decides; a truncated window holding none decides nothing and
+reads not-applicable.
 
 Inline comments fold into exit 1 alongside suppressed ones so that exit 0 is safe
 to read as "terminate". Both need the same loop action; the printout separates
@@ -34,6 +42,11 @@ REST adds an author-authored review artifact, so a PR that accumulated more than
 report not-applicable. Reaching it takes 50-plus replies with no push in between,
 roughly ten times anything measured, and the loop's round cap bounds the outcome
 to a wrong report rather than a hang.
+
+It also reads the newest 50 review-request events, for any reviewer. A PR whose
+newest 50 hold none of Copilot's reports the request time as unknown and reads
+not-applicable. That clears itself: the re-request it prescribes puts a Copilot
+event back into the window.
 """
 import json
 import re
@@ -59,6 +72,15 @@ query($owner:String!, $repo:String!, $number:Int!) {
           body
         }
       }
+      timelineItems(itemTypes:[REVIEW_REQUESTED_EVENT], last:50) {
+        filteredCount
+        nodes {
+          ... on ReviewRequestedEvent {
+            createdAt
+            requestedReviewer { __typename ... on Bot { login } ... on User { login } }
+          }
+        }
+      }
     }
   }
 }
@@ -69,6 +91,26 @@ query($owner:String!, $repo:String!, $number:Int!) {
 # re-request response. A filter built by equality against any one of them
 # silently never matches, which presents as a review that never lands.
 COPILOT = re.compile(r"copilot", re.IGNORECASE)
+
+
+def is_copilot(actor):
+    """Whether a GraphQL actor (a review author, or a requested reviewer) is Copilot.
+
+    Two independent conditions. Requiring __typename Bot excludes a human
+    collaborator whose login happens to contain "copilot", and the login match
+    stays a loose substring on purpose: the bot's login differs across API
+    surfaces, and anchoring it would trade a false positive for a false negative
+    on any future surface, which presents as a review that never lands.
+
+    Known false positive: Copilot's coding agent (`copilot-swe-agent`) is also a
+    Bot with "copilot" in its login, and its thread replies create review
+    artifacts that read here as reviewer verdicts.
+    """
+    # TODO: exclude Copilot's coding agent from the reviewer match (#151)
+    actor = actor or {}
+    return actor.get("__typename") == "Bot" and bool(COPILOT.search(actor.get("login") or ""))
+
+
 # Copilot marks withheld findings with a labelled, parenthesised count, but it
 # has moved that label between surfaces. It has been the <summary> text
 # ("Suppressed comments (N)", "Comments suppressed due to low confidence (N)")
@@ -455,6 +497,28 @@ def fetch(owner, repo, number):
     return repository["pullRequest"]
 
 
+# The request window held events but none of Copilot's, so whether one exists
+# outside it is unknown. Its own value, not None: None means "never requested",
+# and reading a truncated window as that would clear a stale review.
+UNKNOWN = object()
+
+
+def latest_copilot_request(timeline):
+    """Return the newest Copilot request time, None if there is none, or UNKNOWN.
+
+    The query fetches the newest events, so a Copilot request found in the window
+    is the latest one. Finding none proves there is none only when the window holds
+    every event; otherwise the answer is UNKNOWN.
+    """
+    times = [node["createdAt"] for node in timeline["nodes"]
+             if is_copilot(node.get("requestedReviewer"))]
+    if times:
+        return max(times)
+    if timeline["filteredCount"] > len(timeline["nodes"]):
+        return UNKNOWN
+    return None
+
+
 def main():
     if len(sys.argv) != 4:
         print(__doc__.strip(), file=sys.stderr)
@@ -476,32 +540,29 @@ def main():
     # GraphQL is the only surface that shows a pending Copilot request. Both
     # `gh pr view --json reviewRequests` and REST /requested_reviewers return
     # empty while one is outstanding, so an adapter reading either double-requests.
-    # Same two conditions as the review filter below. A human collaborator whose
-    # login contains "copilot" would otherwise read as a pending bot request,
-    # which parks the loop in wait instead of re-requesting.
+    # A human collaborator whose login contains "copilot" would otherwise read as
+    # a pending bot request, which parks the loop in wait instead of re-requesting.
     pending = [
-        reviewer["login"]
-        for reviewer in (node["requestedReviewer"] or {} for node in pr["reviewRequests"]["nodes"])
-        if reviewer.get("__typename") == "Bot" and COPILOT.search(reviewer.get("login") or "")
+        node["requestedReviewer"]["login"]
+        for node in pr["reviewRequests"]["nodes"]
+        if is_copilot(node["requestedReviewer"])
     ]
     print(f"pending {pending if pending else 'none'}")
+
+    latest_request = latest_copilot_request(pr["timelineItems"])
+    if latest_request is UNKNOWN:
+        timeline = pr["timelineItems"]
+        print(f"requested UNKNOWN (no Copilot request among the newest "
+              f"{len(timeline['nodes'])} of {timeline['filteredCount']})")
+    else:
+        print(f"requested {latest_request or 'none'}")
 
     at_head = None
     at_head_submitted = ""
     for review in pr["reviews"]["nodes"]:
         # Our own `:zap:` thread replies create author-authored COMMENTED review
         # artifacts with empty bodies. Only Copilot's reviews are verdicts.
-        #
-        # Two independent conditions. Requiring __typename Bot excludes a human
-        # collaborator whose login happens to contain "copilot", and the login
-        # match stays a loose substring on purpose: the bot's login differs
-        # across API surfaces, and anchoring it would trade a false positive
-        # that needs a hostile-named collaborator for a false negative on any
-        # future surface, which presents as a review that never lands.
-        author = review["author"] or {}
-        if author.get("__typename") != "Bot":
-            continue
-        if not COPILOT.search(author.get("login") or ""):
+        if not is_copilot(review["author"]):
             continue
         oid = (review["commit"] or {}).get("oid")
         count, findings, labels, undeclared = parse_suppressed(review["body"] or "")
@@ -552,6 +613,38 @@ def main():
         print("\nNOT APPLICABLE: no Copilot review at head. Copilot does not "
               "re-review on push, so this is silent abandonment, not clean. "
               "Re-request, or wait if one is already pending.")
+        return NOT_APPLICABLE
+    # A re-request with no push leaves the previous review at head. It answers an
+    # earlier request, so its verdict is not the one being waited for. The pending
+    # flag and the request timeline are separate surfaces, and the review counts
+    # only when both agree it is current: a flag that never clears costs waits up
+    # to the round cap, while trusting either surface alone reads a stale review as
+    # current whenever the other one is right.
+    if pending:
+        # The flag alone cannot show the review is stale. Saying so when no request
+        # event is newer than the review matters at max_rounds: it is the only hint
+        # that the flag itself may be stuck. Never "re-request" here: that is the
+        # double-request trap.
+        flag_alone = latest_request is None or (
+            latest_request is not UNKNOWN and at_head_submitted > latest_request)
+        if flag_alone:
+            print("\nNOT APPLICABLE: a Copilot request is pending, but no Copilot request "
+                  "event is newer than the review at head, so the flag may be stale. "
+                  "Wait for the new review; if it is still pending at max_rounds, report "
+                  "the stuck request.")
+        else:
+            print("\nNOT APPLICABLE: a Copilot request is pending, so the review at head "
+                  "answers an earlier one. Wait for the new review.")
+        return NOT_APPLICABLE
+    if latest_request is UNKNOWN:
+        print("\nNOT APPLICABLE: the request window holds no Copilot request but is "
+              "truncated, so the review at head cannot be matched to one. Nothing is "
+              "pending: re-request.")
+        return NOT_APPLICABLE
+    # Strict: timestamps have one-second resolution, so a tie cannot be ordered.
+    if latest_request is not None and at_head_submitted <= latest_request:
+        print("\nNOT APPLICABLE: the review at head is not newer than the latest Copilot "
+              "request, so it answers an earlier one. Nothing is pending: re-request.")
         return NOT_APPLICABLE
     inline, count, labels, parsed, undeclared, overview_reasons = at_head
     if not labels:
