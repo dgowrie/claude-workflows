@@ -622,12 +622,15 @@ def main():
     # current whenever the other one is right.
     if pending:
         # The flag alone cannot show the review is stale. Saying so when no request
-        # event is newer than the review matters at max_rounds: it is the only hint
-        # that the flag itself may be stuck. Never "re-request" here: that is the
-        # double-request trap.
-        flag_alone = latest_request is None or (
-            latest_request is not UNKNOWN and at_head_submitted > latest_request)
-        if flag_alone:
+        # event is newer than the review, or the window cannot tell, matters at
+        # max_rounds: it is the only hint that the flag itself may be stuck. Never
+        # "re-request" here: that is the double-request trap.
+        if latest_request is UNKNOWN:
+            print("\nNOT APPLICABLE: a Copilot request is pending, and the truncated request "
+                  "window cannot show which request the review at head answers; the flag "
+                  "may be stale. Wait for the new review; if it is still pending at "
+                  "max_rounds, report the stuck request.")
+        elif latest_request is None or at_head_submitted > latest_request:
             print("\nNOT APPLICABLE: a Copilot request is pending, but no Copilot request "
                   "event is newer than the review at head, so the flag may be stale. "
                   "Wait for the new review; if it is still pending at max_rounds, report "

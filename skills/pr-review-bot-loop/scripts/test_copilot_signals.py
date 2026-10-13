@@ -780,7 +780,7 @@ class ReportTests(unittest.TestCase):
         """
         self.assertIn("NOT APPLICABLE", last)
         self.assertIn("request is pending", last)
-        self.assertNotIn("re-request", last)
+        self.assertNotIn("re-request", last.lower())
 
     def test_pending_request_with_a_newer_request_event_says_wait(self):
         last = self.pending_last_line(requested=[AFTER_REVIEW])
@@ -788,8 +788,15 @@ class ReportTests(unittest.TestCase):
         self.assertIn("answers an earlier one", last)
 
     def test_pending_request_with_a_truncated_window_says_wait(self):
-        self.assertSaysWait(self.pending_last_line(
-            requested=[(AFTER_REVIEW, "some-human", "User")], requested_count=51))
+        """The window cannot show which request the review answers, so neither
+        "answers an earlier one" nor "no event is newer" is proven; keep the
+        may-be-stale hint the max_rounds report relies on."""
+        last = self.pending_last_line(
+            requested=[(AFTER_REVIEW, "some-human", "User")], requested_count=51)
+        self.assertSaysWait(last)
+        self.assertIn("may be stale", last)
+        self.assertNotIn("answers an earlier one", last)
+        self.assertNotIn("no Copilot request event is newer", last)
 
     def test_pending_flag_with_a_review_newer_than_every_request_says_it_may_be_stale(self):
         """The flag alone cannot show the review is stale, so do not claim it is.
