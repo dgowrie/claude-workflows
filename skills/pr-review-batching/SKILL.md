@@ -15,15 +15,16 @@ description: >
   pending path for PR feedback. The offer boundary matters as much as the execution one: checking
   only at execution time is too late to avoid promising a staging flow that does not exist for
   thread replies. Also triggers on phrases: "draft comment", "pending review", "post this as a
-  draft", "add to the review", "stage as a draft", "reply to the review comments", or explicit
-  `/pr-review-batching`.
+  draft", "add to the review", "stage as a draft", "post the comments", "post the drafts",
+  "submit the review", "reply to the review comments", or explicit `/pr-review-batching`.
 ---
 
 # PR Review Batching
 
 This skill owns the submission lifecycle for PR review comments. Every *new inline comment* is
 staged as a draft on a pending review; the user submits manually. Claude never sets
-`event=COMMENT`, `event=APPROVE`, or `event=REQUEST_CHANGES`.
+`event=COMMENT`, `event=APPROVE`, or `event=REQUEST_CHANGES` unless the user names the event
+(hard rule 1).
 
 Replies to *existing* review threads are the exception: GitHub offers no draft path for them
 (see Operation 3). Never offer to stage a thread reply. Check which kind of comment is in play
@@ -38,9 +39,15 @@ Documented user convention (global `CLAUDE.md`):
 
 ## Hard rules
 
-1. **Never submit a review.** Do not pass an `event` field on POST to
-   `/pulls/{n}/reviews`, and do not call `gh pr review` with `--comment`, `--approve`, or
-   `--request-changes`. Omitting `event` keeps the review in state `PENDING`.
+1. **Never submit a review on your own.** Do not pass an `event` field on POST to
+   `/pulls/{n}/reviews` or `/pulls/{n}/reviews/{id}/events`, and do not call `gh pr review`
+   with `--comment`, `--approve`, or `--request-changes`. Omitting `event` keeps the review in
+   state `PENDING`.
+
+   **"Post" is not "submit".** "Post the comments", "post the drafts" or "put these on the PR"
+   mean stage them as pending. If they are already pending, say so and stop. Submit only when
+   the user names the event ("submit the review", "submit as Comment") or says yes to a
+   question from you that names it. Draft PRs follow the same rule.
 2. **Never PATCH an existing draft comment.** `PATCH /pulls/comments/{id}` is a blind
    overwrite of whatever the user may be editing in the browser. Use delete-and-recreate.
 3. **Line numbers come from the file at the PR head SHA**, not diff offsets. Verify with
